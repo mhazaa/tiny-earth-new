@@ -1,0 +1,243 @@
+@import url('https://fonts.googleapis.com/css?family=Catamaran:100,200,300,400,500,600,700,800,900&display=swap');
+
+* {
+  user-drag: none;
+  user-select: none;
+  -moz-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+}
+
+body {
+  overflow: hidden;
+}
+
+canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+}
+
+#splash {
+  z-index: 9999;
+}
+
+#lobbyInterface {
+  background: rgba(0,0,0,0.6);
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 999;
+  text-align: center;
+}
+
+#lobbyInterface #intro {
+  position: absolute;
+  width: 100%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+#intro h1 {
+  text-indent: -99999px;
+  display: block;
+  background: url('../imgs/intro_logo.png');
+  background-size: cover;
+  width: 500px;
+  height: 78px;
+  margin: auto;
+}
+
+form {
+  width: 40%;
+  margin: auto;
+  position: relative;
+  display: none;
+}
+
+form input {
+  outline: none;
+  border: none;
+  width: 100%;
+  height: 50px;
+  display: block;
+  margin: 5px auto;
+  padding: 5px 0;
+  text-align: center;
+  font-family: 'Catamaran', sans-serif;
+  font-size: 16px;
+  border-radius: 5px;
+}
+form .submit {
+  background: #4f3a1d;
+  width: 40%;
+  font-size: 16px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #fceed2;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+form p {
+  font-size: 18px;
+  color: #fceed2;
+  font-family: 'Catamaran', sans-serif;
+}
+button {
+  outline: none;
+  border: none;
+  margin: 0;
+}
+form .submit:hover, button:hover {
+  opacity: 0.6;
+}
+
+#loginForm {
+  display: block;
+  margin-top: 10px;
+}
+
+#loginForm input {
+  margin: 0;
+  padding: 0;
+  float: left;
+}
+#loginForm .input {
+  width: 70%;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+#loginForm .submit {
+  width: 30%;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+#hyperlinkForm .input:nth-of-type(1){
+  width: 100%;
+  margin-bottom: 5px;
+}
+
+/*ingame styling*/
+
+#ingameInterface {
+  display: none;
+  z-index: 99;
+}
+
+#header {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: block;
+  text-align: left;
+}
+#header #logo {
+  text-indent: -99999px;
+  display: block;
+  background: url('../imgs/ingame_logo.png');
+  background-size: cover;
+  width: 200px;
+  height: 129px;
+}
+#header p {
+  display: block;
+  font-family: 'Catamaran', sans-serif;
+  color: #fceed2;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  text-transform: uppercase;
+}
+
+#header #activeUsers span {
+  background: #4f3a1d;
+  padding: 0 7px;
+  margin: 0 2px;
+}
+
+#header #clock {
+  font-size: 38px;
+  font-weight: 100;
+}
+
+#noticeText {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  font-family: 'Catamaran', sans-serif;
+  font: 14px;
+  text-transform: uppercase;
+  color: #fceed2;
+  z-index: 99;
+}
+
+#clear {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: yellow;
+}
+
+.uploadForm {
+  position: absolute;
+  display: none;
+  width: 500px;
+  height: auto;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 15px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 5px;
+  z-index: 999;
+}
+
+#footer {
+  display: block;
+  background: url('../imgs/footer_background.png');
+  background-size: cover;
+  width: 350px;
+  height: 96px;
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+#footer #grid {
+  display: inline-block;
+  margin-top: 5px;
+}
+#grid img {
+  display: block;
+  float: left;
+  width: 50px;
+  height: auto;
+  margin-right: 10px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+#grid img:hover {
+  opacity: 0.6;
+}
+
+#chatForm {
+  width: 400px;
+}
+
+@media only screen and (max-width: 800px) {
+  form {
+    width: 80%
+  }
+}

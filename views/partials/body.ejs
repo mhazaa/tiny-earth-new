@@ -1,0 +1,53 @@
+<div id="lobbyInterface">
+  <div id="intro">
+    <h1>BONGO TOWN</h1>
+    <form id="loginForm" autocomplete="off">
+      <input type="text" class="input" id="loginInput" placeholder="Choose a username" maxlength="20">
+      <input type="submit" class="submit" value="Start">
+    </form>
+  </div>
+</div>
+
+<div id="ingameInterface">
+  <div id="header">
+    <h1 id="logo">BONGO TOWN</h1>
+    <p id="activeUsers"><span>4</span><span>users active</span></p>
+    <p id="clock">00:00:00</p>
+  </div>
+
+  <p id="noticeText"></p>
+  <button id="clear">Clear All Media</button>
+
+  <div id="footer">
+    <div id="grid">
+      <img class="icon" src="assets/imgs/image.png">
+      <img class="icon" src="assets/imgs/audio.png">
+      <img class="icon" src="assets/imgs/hyperlink.png">
+    </div>
+  </div>
+
+  <form id="chatForm" autocomplete="off">
+    <input type="text" class="input" id="chatInput" placeholder="send message here">
+    <input type="submit" class="submit" value="send">
+  </form>
+
+  <form id="imageForm" class="uploadForm" autocomplete="off" enctype="multipart/form-data">
+    <p>Enter the image URL</p>
+    <input type="text" class="input" placeholder="put URL here">
+    <p>Or upload your own file</p>
+    <input type="file" class="input" placeholder="or upload your own file">
+    <input type="submit" class="submit" value="upload">
+  </form>
+  <form id="audioForm" class="uploadForm" autocomplete="off" enctype="multipart/form-data">
+    <p>Enter the audio URL</p>
+    <input type="text" class="input" placeholder="put URL here">
+    <p>Or upload your own file</p>
+    <input type="file" class="input" placeholder="or upload your own file">
+    <input type="submit" class="submit" value="upload">
+  </form>
+  <form id="hyperlinkForm" class="uploadForm" autocomplete="off" enctype="multipart/form-data">
+    <input type="text" class="input" placeholder="title">
+    <input type="text" class="input" placeholder="put URL here">
+    <input type="submit" class="submit" value="upload">
+  </form>
+</div>
