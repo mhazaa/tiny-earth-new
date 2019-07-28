@@ -33,7 +33,7 @@ var rooms = [];
 module.exports.images = images;
 module.exports.audios = audios;
 module.exports.hyperlinks = hyperlinks;
-module.exports.hyperlinks = rooms;
+module.exports.rooms = rooms;
 
 module.exports.route = function(app, io){
 	app.post('/sendImage', function(req, res){
@@ -76,14 +76,14 @@ function post(mediaData, array, req, res, io){
 			return;
 		}
 		if(fields['url']!=undefined){ //if hyperlink
-			console.log(fields.url + ' remote ' + mediaData.consoleType + ' uploaded to server');
+			console.log(fields.url + ' ' + mediaData.consoleType + ' uploaded to server');
 			array[post.id] = post;
 			io.sockets.emit(mediaData.socketCommand, post);
 			res.end();
 			return;
 		}
 		if(fields['roomName']!=undefined){ //if room
-			console.log(fields.roomName + ' remote ' + mediaData.consoleType + ' uploaded to server');
+			console.log(fields.roomName + ' ' + mediaData.consoleType + ' uploaded to server');
 			array[post.id] = post;
 			io.sockets.emit(mediaData.socketCommand, post);
 			res.end();

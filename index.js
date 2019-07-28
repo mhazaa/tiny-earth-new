@@ -91,14 +91,7 @@ io.on('connect', function(socket){
 		});
 
 		socket.on('updateMediaPosition', function(data){
-			var array;
-			if(data.type=='image'){
-				array=postRouter.images;
-			} else if(data.type=='audio'){
-				array=postRouter.audios;
-			} else if(data.type=='hyperlink'){
-				array=postRouter.hyperlinks;
-			}
+			var array = postRouter[data.arrayType];
 			array[data.id].x = data.x;
 			array[data.id].y = data.y;
 			socket.broadcast.emit('updateMediaPosition', {

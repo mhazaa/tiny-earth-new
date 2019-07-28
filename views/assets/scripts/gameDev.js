@@ -366,9 +366,9 @@ class Media {
     allNodes.push(this);
     this.id = null;
   }
-  draggable(type, onclick){
+  draggable(arrayType, onclick){
     var that = this;
-    var type = type;
+    var arrayType = arrayType;
     if(typeof onclick != undefined) var onclick = onclick;
     var mouse = new THREE.Vector2();
     var held = false;
@@ -421,7 +421,7 @@ class Media {
         obj.position.x = loc.x - pivotX;
         obj.position.y = loc.y - pivotY;
         socket.emit('updateMediaPosition', {
-          type: type,
+          arrayType: arrayType,
           id: that.id,
           x: obj.position.x,
           y: obj.position.y
@@ -449,7 +449,7 @@ class Image extends Media {
     this.highlighted = false;
     this.sprite = new Sprite(path, x, y, 500);
     this.collisionArea = new CollisionArea(this, collisionGroups.imageArea, x, y);
-    this.draggable('image');
+    this.draggable('images');
   }
   update(){
     this.collisionArea.position.x = this.sprite.sprite.position.x;
@@ -475,7 +475,7 @@ class Audio extends Media {
     });
     this.sprite = new Sprite('assets/imgs/audio.png', x, y, 150, 150);
     this.collisionArea = new CollisionArea(this, collisionGroups.audioArea, x, y, 300, 300);
-    this.draggable('audio');
+    this.draggable('audios');
   }
   update(){
     this.collisionArea.position.x = this.sprite.sprite.position.x;
@@ -495,7 +495,7 @@ class Hyperlink extends Media {
     this.highlighted = false;
     this.sprite = new Sprite('assets/imgs/hyperlink.png', x, y, 150, 150);
     this.collisionArea = new CollisionArea(this, collisionGroups.hyperlinkArea, x, y, 300, 300);
-    this.draggable('hyperlink', function(){
+    this.draggable('hyperlinks', function(){
       window.open(that.url);
     });
   }
@@ -520,6 +520,7 @@ class Room extends Media {
     this.inCollision = false;
     this.insideRoom = false;
     this.input();
+    this.draggable('rooms');
   }
   input(){
     var that = this;
