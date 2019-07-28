@@ -96,6 +96,8 @@ io.on('connect', function(socket){
 				array=postRouter.images;
 			} else if(data.type=='audio'){
 				array=postRouter.audios;
+			} else if(data.type=='hyperlink'){
+				array=postRouter.hyperlinks;
 			}
 			array[data.id].x = data.x;
 			array[data.id].y = data.y;

@@ -15,7 +15,10 @@
     <p id="clock">00:00:00</p>
   </div>
 
-  <p id="noticeText"></p>
+  <p id="noticeText">
+    <span>click [A, D, W, S] or [ARROW KEYS] to move</span><br>
+    <span></span>
+  </p>
   <button id="clear">Clear All Media</button>
 
   <div id="footer">
@@ -32,6 +35,7 @@
   </form>
 
   <form id="imageForm" class="uploadForm" autocomplete="off" enctype="multipart/form-data">
+    <div class="exitForm"></div>
     <p>Enter the image URL</p>
     <input type="text" class="input" placeholder="put URL here">
     <p>Or upload your own file</p>
@@ -39,6 +43,7 @@
     <input type="submit" class="submit" value="upload">
   </form>
   <form id="audioForm" class="uploadForm" autocomplete="off" enctype="multipart/form-data">
+    <div class="exitForm"></div>
     <p>Enter the audio URL</p>
     <input type="text" class="input" placeholder="put URL here">
     <p>Or upload your own file</p>
@@ -46,6 +51,7 @@
     <input type="submit" class="submit" value="upload">
   </form>
   <form id="hyperlinkForm" class="uploadForm" autocomplete="off" enctype="multipart/form-data">
+    <div class="exitForm"></div>
     <input type="text" class="input" placeholder="title">
     <input type="text" class="input" placeholder="put URL here">
     <input type="submit" class="submit" value="upload">

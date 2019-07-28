@@ -1,10 +1,14 @@
+var raycaster = new THREE.Raycaster();
 var allNodes = [];
+var clientPlayer;
+var currentScene;
 var collisionGroups = {
   audioArea: [],
   imageArea: [],
-  hyperlinkArea: []
+  hyperlinkArea: [],
+  roomArea: []
 }
-var clientPlayer;
+
 //MOUSE CONTROLS
 var keyState = {};
 document.addEventListener('keydown', function(e){
@@ -18,25 +22,64 @@ document.addEventListener('keyup', function(e){
 
 //SETTING UP RENDERER, CAMERA, AND SCENE
 var scene = new THREE.Scene();
-var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000);
-var renderer = new THREE.WebGLRenderer({ antialias: true });
+currentScene = scene;
+var playersScene = new THREE.Scene();
+var clientPlayerScene = new THREE.Scene();
+var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.autoClear = false;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.domElement.id = 'canvas';
 document.body.appendChild(renderer.domElement);
 
-console.log(renderer.antialias);
+//SETTING UP ORTHOGRAPHIC CAMERA
+var w = window.innerWidth;
+var h = window.innerHeight;
+var viewSize = h;
+var aspectRatio = w / h;
+var viewport = {
+    viewSize: viewSize,
+    aspectRatio: aspectRatio,
+    left: (-aspectRatio * viewSize) / 2,
+    right: (aspectRatio * viewSize) / 2,
+    top: viewSize / 2,
+    bottom: -viewSize / 2,
+    near: -1000,
+    far: 1000
+}
+var camera = new THREE.OrthographicCamera (
+    viewport.left,
+    viewport.right,
+    viewport.top,
+    viewport.bottom,
+    viewport.near,
+    viewport.far
+);
 
-//RESIZING RENDERER WITHOUT SCALING
+//RESIZING RENDERER WITHOUT SCALING FOR ORTHOGRAPHIC CAMERA CAMERA
+window.addEventListener('resize', function(){
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.render(scene, camera);
+
+    camera.left = -window.innerWidth / 2;
+    camera.right = window.innerWidth /2;
+    camera.top = window.innerHeight / 2;
+    camera.bottom = -window.innerHeight / 2;
+    camera.updateProjectionMatrix();
+});
+
+//RESIZING RENDERER WITHOUT SCALING FOR PERSPECTIVE CAMERA
+/*
 var tanFOV = Math.tan( ( ( Math.PI / 180 ) * camera.fov / 2 ) );
 var windowHeight = window.innerHeight;
 window.addEventListener('resize', function (){
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.fov = (360 / Math.PI) * Math.atan(tanFOV * (window.innerHeight / windowHeight));
-    camera.updateProjectionMatrix();
+    //camera.aspect = window.innerWidth / window.innerHeight;
+    //camera.fov = (360 / Math.PI) * Math.atan(tanFOV * (window.innerHeight / windowHeight));
+    //camera.updateProjectionMatrix();
 
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.render(scene, camera);
 });
+*/
 
 //CREATER AUDIO LISTERNER AND ADD IT TO CAMERA
 var audioListener = new THREE.AudioListener();
@@ -46,16 +89,16 @@ camera.add(audioListener);
 var textureLoader = new THREE.TextureLoader();
 var audioLoader = new THREE.AudioLoader();
 
-//CHANGE BACKGROUND COLOR
-scene.background = new THREE.Color(0xe4d0a5);
 
-//MY GAME CLASSES
+
+
+/* INGAME CLASSES */
+
 class Node {
   constructor(){
     allNodes.push(this);
   }
   update(){
-
   }
 }
 
@@ -78,31 +121,26 @@ class NetworkIdentity {
 class Player extends Node {
   constructor(){
     super();
-    this.geometry = new THREE.BoxGeometry(1, 1, 1);
-    this.material = new THREE.MeshPhongMaterial({
+    this.geometry = new THREE.CircleGeometry(20, 20);
+    /*this.material = new THREE.MeshPhongMaterial({
       color: 0xff0000,
       emissive: 0x2a0000,
       shininess: 10,
       specular: 0xffffff
-    });
+    });*/
+    this.material = new THREE.MeshBasicMaterial( { color: 0x4f3a1d } );
     this.node = new THREE.Mesh(this.geometry, this.material);
-    scene.add(this.node);
     this.networkIdentity = new NetworkIdentity(this);
     this.username = null;
-    this.scale = 0;
-    this.node.scale.set(this.scale,this.scale,this.scale);
-    this.speed = 0.01;
+    this.speed = 3;
   }
   destroy(){
+    console.log('deeestroy');
     scene.remove(this.node);
     this.geometry.dispose();
     this.material.dispose();
     this.node = undefined;
     allNodes.remove(this)
-  }
-  introAnimation (dt) {
-    this.scale = lerp(this.scale, 0.3, 0.05);;
-    this.node.scale.set(this.scale,this.scale,this.scale);
   }
   movement(){
     if(keyState[68] || keyState[39]){
@@ -135,7 +173,7 @@ class Player extends Node {
       }
     });
     document.addEventListener('mouseup', function(e){
-      var drop = canvasToWorldLoc(e.clientX, e.clientY);
+      var drop = canvasToWorldLocOrth(e.clientX, e.clientY);
     })
   }
   collisions(){
@@ -143,11 +181,11 @@ class Player extends Node {
       var audioCA = collisionGroups.audioArea[i];
       audioCA.onEnter = function(){
         console.log('audio area entered');
-        audioCA.owner.play();
+        audioCA.owner.audio.play();
       }
       audioCA.onExit = function(){
         console.log('audio area exited');
-        audioCA.owner.pause();
+        audioCA.owner.audio.pause();
       }
     }
     for(var i=0; i<collisionGroups.imageArea.length; i++){
@@ -162,19 +200,31 @@ class Player extends Node {
       }
     }
     for(var i=0; i<collisionGroups.hyperlinkArea.length; i++){
-      var hyperlinkCA = collisionGroups.imageArea[i];
+      var hyperlinkCA = collisionGroups.hyperlinkArea[i];
       hyperlinkCA.onEnter = function(){
         console.log('hyperlink area entered');
         hyperlinkCA.owner.highlighted = true;
+        dom.noticeText[1].innerHTML = 'Click on the hyperlink to go to the url';
       }
       hyperlinkCA.onExit = function(){
         console.log('hyprlink area exited');
         hyperlinkCA.owner.highlighted = false;
+        dom.noticeText[1].innerHTML = '';
+      }
+    }
+    for(var i=0; i<collisionGroups.roomArea.length; i++){
+      var roomCA = collisionGroups.roomArea[i];
+      roomCA.onEnter = function(){
+        console.log('room area entered');
+        dom.noticeText[1].innerHTML = 'click [E] to enter library';
+      }
+      roomCA.onExit = function(){
+        console.log('room area exited');
+        dom.noticeText[1].innerHTML = '';
       }
     }
   }
   update(){
-    this.introAnimation();
     if(!this.networkIdentity.controlling) return;
     this.movement();
     this.updatePosition();
@@ -187,17 +237,19 @@ class MainCamera extends Node {
   constructor(){
     super();
     this.node = camera;
+    this.node.zoom = 0.3;
     this.player = null;
     this.view = 1;
     this.switchViewDirection = 0;
-    this.switchView(1);
+    this.switchView(0);
   }
   update(){
     if (this.player) {
       this.node.position.x = lerp(this.node.position.x, this.player.node.position.x, 0.02);
       this.node.position.y = lerp(this.node.position.y, this.player.node.position.y, 0.02);
     }
-    this.node.position.z = lerp(this.node.position.z, this.limit, 0.02);
+    this.node.zoom = lerp(this.node.zoom, this.limit, 0.02);
+    this.node.updateProjectionMatrix();
   }
   setTarget(player){
     this.player = player;
@@ -216,11 +268,11 @@ class MainCamera extends Node {
     }
 
     if(this.view == 0){
-      this.limit = 10;
-    } else if(this.view == 1){
-      this.limit = 3;
-    } else if(this.view == 2){
       this.limit = 1;
+    } else if(this.view == 1){
+      this.limit = 0.7;
+    } else if(this.view == 2){
+      this.limit = 0.3;
     }
     console.log('camera view: ' + this.view);
   }
@@ -228,15 +280,17 @@ class MainCamera extends Node {
 
 //collision area
 class CollisionArea extends THREE.Sprite {
-  constructor(collisionGroup, x, y, owner){
+  constructor(owner, collisionGroup, x, y, w, h){
     super(new THREE.SpriteMaterial({ color: '#69f' }));
+    if(typeof w != undefined) this.scale.x = w;
+    if(typeof h != undefined) this.scale.y = h;
+    allNodes.push(this);
+    scene.add(this);
     this.material.opacity = 0;
+    this.position.set(x, y, 1);
     this.owner = owner;
     collisionGroup.push(this);
-    this.scale.set(x,y,0);
-    scene.add(this);
     this.inside = false;
-    allNodes.push(this);
   }
   collision(){
     if(!clientPlayer) return;
@@ -256,7 +310,7 @@ class CollisionArea extends THREE.Sprite {
       if(this.onEnter) this.onEnter();
     }
   }
-  areaExited(fun){
+  areaExited(){
     if(this.inside){
       this.inside = false;
       if(this.onExit) this.onExit();
@@ -264,11 +318,19 @@ class CollisionArea extends THREE.Sprite {
   }
 }
 
-//image
-
+//sprite
 class Sprite {
-  constructor(path, x, y){
-    this.spriteMap = textureLoader.load(path);
+  constructor(path, x, y, w, h){
+    var that = this;
+    this.spriteMap = textureLoader.load(path, function(tex){
+      if(typeof w == 'undefined' && typeof h == 'undefined'){
+        that.sprite.scale.x = tex.image.width;
+        that.sprite.scale.y = tex.image.height;
+      }
+      //tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      //tex.offset.set(1, 1);
+      //tex.repeat.set(5, 5);
+    });
     this.spriteMap.anisotropy = 0;
     this.spriteMap.magFilter = THREE.NearestFilter;
     this.spriteMap.minFilter = THREE.NearestFilter;
@@ -277,129 +339,247 @@ class Sprite {
     this.sprite = new THREE.Sprite(this.spriteMaterial);
     this.sprite.position.x = x;
     this.sprite.position.y = y;
+    if(typeof w != 'undefined' && typeof h != 'undefined'){
+      this.sprite.scale.x = w;
+      this.sprite.scale.y = h;
+    }
     scene.add(this.sprite);
+  }
+  destroy(){
+    scene.remove(this.sprite);
+    this.spriteMaterial.dispose();
+    this.spriteMap.dispose();
+    this.sprite = undefined;
   }
 }
 
-class Image extends Sprite {
-  constructor(path, x, y){
-    super(path, x, y);
+//media
+class Media {
+  constructor(){
     allNodes.push(this);
     this.id = null;
-    this.highlighted = false;
-    this.scaleX = 1;
-    this.scaleY = 1;
-    this.collisionArea = new CollisionArea(collisionGroups.imageArea, 2, 2, this);
   }
-  update(){
-    if (this.highlighted){
-      this.scaleX = lerp(this.scaleX, 2, 0.1);
-      this.scaleY = lerp(this.scaleY, 2, 0.1);
-      this.sprite.scale.set(this.scaleX, this.scaleY, 1);
-    } else {
-      this.scaleX = lerp(this.scaleX, 1, 0.1);
-      this.scaleY = lerp(this.scaleY, 1, 0.1);
-      this.sprite.scale.set(this.scaleX, this.scaleY, 1);
+  draggable(type, onclick){
+    var that = this;
+    var type = type;
+    if(typeof onclick != undefined) var onclick = onclick;
+    var mouse = new THREE.Vector2();
+    var held = false;
+    var intersects = [];
+    var pivotX=0, pivotY=0;
+    var clickOrDrag = 0; //0 for click, 1 for drag
+
+    window.addEventListener('mousedown', dragStart);
+    window.addEventListener('touchstart', dragStart);
+    window.addEventListener('mousemove', drag);
+    window.addEventListener('touchmove', drag);
+    window.addEventListener('mouseup', dragEnd);
+    window.addEventListener('touchend', dragEnd);
+
+    function dragStart(e){
+      clickOrDrag = 0;
+      var mouseX=0, mouseY=0;
+      if (e.type === "touchstart") {
+        mouseX = e.touches[0].clientX;
+        mouseY = e.touches[0].clientY;
+      } else {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+      }
+      mouse.x = ( mouseX / window.innerWidth ) * 2 - 1;
+      mouse.y = - ( mouseY / window.innerHeight ) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      intersects = raycaster.intersectObjects( [that.sprite.sprite] );
+      if(intersects.length>0){
+        held = true;
+        var loc = canvasToWorldLocOrth(mouseX, mouseY);
+        var obj = intersects[0].object;
+        pivotX = loc.x-parseInt(obj.position.x);
+        pivotY = loc.y-parseInt(obj.position.y);
+      }
+    }
+    function drag(e){
+      if(held){
+        clickOrDrag = 1;
+        var mouseX=0, mouseY=0;
+        if (e.type === "touchstart") {
+          mouseX = e.touches[0].clientX;
+          mouseY = e.touches[0].clientY;
+        } else {
+          mouseX = e.clientX;
+          mouseY = e.clientY;
+        }
+        var loc = canvasToWorldLocOrth(mouseX, mouseY);
+        var obj = intersects[0].object;
+        obj.position.x = loc.x - pivotX;
+        obj.position.y = loc.y - pivotY;
+        socket.emit('updateMediaPosition', {
+          type: type,
+          id: that.id,
+          x: obj.position.x,
+          y: obj.position.y
+        });
+      }
+    }
+    function dragEnd(){
+      if(held){
+        held = false;
+        if(clickOrDrag==0 && onclick){ //click
+          onclick();
+        }
+      }
     }
   }
 }
 
-class Audio extends THREE.Audio {
+//image
+class Image extends Media {
   constructor(path, x, y){
-    super(audioListener);
-    allNodes.push(this);
-    var that = this;
-    audioLoader.load(path, function(buffer){
-      that.setBuffer(buffer);
-      that.setLoop(true);
-      that.play();
-    });
-    // create an object for the sound to play from
-    this.sprite = new Sprite('assets/imgs/audio.png', x, y);
-    this.collisionArea = new CollisionArea(collisionGroups.audioArea, 2, 2, this);
+    super();
+    this.highlighted = false;
+    this.sprite = new Sprite(path, x, y);
+    this.collisionArea = new CollisionArea(this, collisionGroups.imageArea, x, y);
+    this.draggable('image');
   }
   update(){
-    if (this.isPlaying){
+    this.collisionArea.position.x = this.sprite.sprite.position.x;
+    this.collisionArea.position.y = this.sprite.sprite.position.y;
+    this.collisionArea.scale.x = this.sprite.sprite.scale.x*1.3;
+    this.collisionArea.scale.y = this.sprite.sprite.scale.y*1.3;
+    if (this.highlighted){
+      this.sprite.spriteMaterial.rotation = lerp(this.sprite.spriteMaterial.rotation, 0.2, 0.1);
+    } else {
+      this.sprite.spriteMaterial.rotation = lerp(this.sprite.spriteMaterial.rotation, 0, 0.1);
+    }
+  }
+}
+
+class Audio extends Media {
+  constructor(path, x, y){
+    super();
+    var that = this;
+    this.audio = new THREE.Audio(audioListener);
+    audioLoader.load(path, function(buffer){
+      that.audio.setBuffer(buffer);
+      that.audio.setLoop(true);
+    });
+    this.sprite = new Sprite('assets/imgs/audio.png', x, y, 150, 150);
+    this.collisionArea = new CollisionArea(this, collisionGroups.audioArea, x, y, 300, 300);
+    this.draggable('audio');
+  }
+  update(){
+    this.collisionArea.position.x = this.sprite.sprite.position.x;
+    this.collisionArea.position.y = this.sprite.sprite.position.y;
+    if (this.audio.isPlaying){
       this.sprite.spriteMaterial.rotation += 0.01; //*dt;
     }
   }
 }
 
-class Hyperlink {
-  constructor(path, x, y){
-    allNodes.push(this);
+class Hyperlink extends Media {
+  constructor(x, y){
+    super();
+    var that = this;
     this.title = null;
     this.url = null
     this.highlighted = false;
-    this.scaleX = 1;
-    this.scaleY = 1;
-    this.iconSprite = new Sprite('assets/imgs/hyperlink.png', x, y);
-    this.collisionArea = new CollisionArea(collisionGroups.hyperlinkArea, 2, 2, this);
+    this.sprite = new Sprite('assets/imgs/hyperlink.png', x, y, 150, 150);
+    this.collisionArea = new CollisionArea(this, collisionGroups.hyperlinkArea, x, y, 300, 300);
+    this.draggable('hyperlink', function(){
+      window.open(that.url);
+    });
   }
   update(){
+    this.collisionArea.position.x = this.sprite.sprite.position.x;
+    this.collisionArea.position.y = this.sprite.sprite.position.y;
     if (this.highlighted){
-      this.scaleX = lerp(this.scaleX, 2, 0.1);
-      this.scaleY = lerp(this.scaleY, 2, 0.1);
-      this.iconSprite.scale.set(this.scaleX, this.scaleY, 1);
+      this.sprite.spriteMaterial.rotation = lerp(this.sprite.spriteMaterial.rotation, Math.PI*2, 0.05);
     } else {
-      this.scaleX = lerp(this.scaleX, 1, 0.1);
-      this.scaleY = lerp(this.scaleY, 1, 0.1);
-      this.iconSprite.scale.set(this.scaleX, this.scaleY, 1);
+      this.sprite.spriteMaterial.rotation = lerp(this.sprite.spriteMaterial.rotation, 0, 0.05);
     }
   }
 }
 
-/*
-var raycaster = new THREE.Raycaster();
-var mouse = new THREE.Vector2();
-window.addEventListener( 'mousemove', onMouseMove, false );
-function onMouseMove( event ) {
-  mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-	mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+class Room {
+  constructor(x, y){
+    //allNodes.push(this);
+    this.id = null;
+    this.scene = new THREE.Scene();
+    this.sprite = new Sprite('assets/imgs/home.png', x, y, 150, 150);
+    this.collisionArea = new CollisionArea(this, collisionGroups.roomArea, x, y, 300, 300);
+    this.input();
+  }
+  input(){
+    var that = this;
+    document.addEventListener('keyup', function(e){
+      var keyCode = e.keyCode;
+      if(keyCode==69){
+        currentScene = that.scene;
+      }
+    });
+  }
 }
-collisionArea.update = function(){
-	// update the picking ray with the camera and mouse position
-	raycaster.setFromCamera( mouse, camera );
-	// calculate objects intersecting the picking ray
-	var intersects = raycaster.intersectObjects( collisionGroup );
 
-	for ( var i = 0; i < intersects.length; i++ ) {
-    console.log(intersects[i]);
-    intersects[ i ].object.material.color.set( 0xff0000 );
-	}
+class Tutorial {
+  constructor(){
+    this.movedLeft = false;
+    this.movedRight = false;
+    this.movedUp = false;
+    this.movedDown = false;
+    this.changedView = 0;
+    this.tutorialPhase = 'movement';
+    this.tutorialEvents = null;
+    this.input();
+  }
+  switchTutorial(){
+    if(this.tutorialPhase=='movement' && this.movedLeft && this.movedRight && this.movedUp && this.movedDown){
+      this.tutorialPhase = 'changingView';
+    }
+    if(this.tutorialPhase=='changingView'){
+      if(this.changedView>3){
+        dom.noticeText[0].innerHTML = '';
+        document.removeEventListener('keyup', this.tutorialEvents);
+        return;
+      }
+      dom.noticeText[0].innerHTML = 'click [V] to change viewpoint';
+    }
+  }
+  input(){
+    var that = this;
+    this.tutorialEvents = function(e){
+      var keyCode = e.keyCode;
+      switch(keyCode){
+        case 68:
+        case 39:
+          that.movedRight = true;
+          that.switchTutorial();
+          break;
+        case 65:
+        case 37:
+          that.movedLeft = true;
+          that.switchTutorial();
+          break;
+        case 87:
+        case 38:
+          that.movedUp = true;
+          that.switchTutorial();
+          break;
+        case 83:
+        case 40:
+          that.movedDown = true;
+          that.switchTutorial();
+          break;
+        case 86:
+          if(that.tutorialPhase=='changingView'){
+            that.changedView++;
+            that.switchTutorial();
+          }
+          break;
+      }
+    }
+    document.addEventListener('keyup', this.tutorialEvents);
+  }
 }
-var raycaster = new THREE.Raycaster();
-var mouseVector = new THREE.Vector3();
-function getIntersects( x, y ) {
-  x = ( x / window.innerWidth ) * 2 - 1;
-  y = - ( y / window.innerHeight ) * 2 + 1;
-  mouseVector.set( x, y, 0.5 );
-  raycaster.setFromCamera( mouseVector, camera );
-  return raycaster.intersectObject( collisionGroup, true );
-}
-var selectedObject = null;
-window.addEventListener('mousemove', onDocumentMouseMove);
-		function onDocumentMouseMove( event ) {
-			event.preventDefault();
-			if ( selectedObject ) {
-				selectedObject.material.color.set( '#69f' );
-				selectedObject = null;
-			}
-			var intersects = getIntersects( event.layerX, event.layerY );
-			if ( intersects.length > 0 ) {
-				var res = intersects.filter( function ( res ) {
-					return res && res.object;
-				} )[ 0 ];
-				if ( res && res.object ) {
-					selectedObject = res.object;
-					selectedObject.material.color.set( '#f00' );
-				}
-			}
-		}
-
-
-*/
-
 
 //networkManager
 class NetworkManager {
@@ -428,6 +608,9 @@ class NetworkManager {
         mainCamera.setTarget(player);
         player.input();
         clientPlayer = player;
+        clientPlayerScene.add(player.node);
+      } else {
+        playersScene.add(player.node);
       }
     });
     socket.on("disconnected", function(data) {
@@ -445,43 +628,46 @@ class NetworkManager {
     });
     socket.on('updateTime', function(data){
       dom.clock.innerHTML = data;
+      //var a = parseInt(data[6]+data[7]);
+      ///var opacity = map(a,0,60,0,1);
+      //console.log(a, opacity);
+      //renderer.domElement.style.background = 'red';
+      //renderer.domElement.style.background = 'rgba(228, 208, 165, ' + 0 + ');';
     });
     //socket.on("sendMessage", function(data) {
     //  var player = that.serverPlayers[data.id];
     //  player.node.getComponent("PlayerManager").showMessage(data.message);
     //});
-
-    socket.on("sendImage", function(data) {
+    socket.on("sendImage", function(data){
       console.log(data.name + " img  instantiated");
       var path = that.imagesFolder + '/' + data.name;
       var image = new Image(path, data.x, data.y);
       image.id = data.id;
-      that.serverMedia[data.id] = data;
+      that.serverMedia[data.id] = image;
     });
-    socket.on("sendAudio", function(data) {
+    socket.on("sendAudio", function(data){
       console.log(data.name + " audio  instantiated");
-
       var path = that.audioFolder + '/' + data.name;
       var audio = new Audio(path, data.x, data.y);
-      //audio.id = audio.id;
-      that.serverMedia[data.id] = data;
+      audio.id = data.id;
+      that.serverMedia[data.id] = audio;
     });
-    /*
-    socket.on("sendHyperlink", function(data) {
+    socket.on("sendHyperlink", function(data){
       console.log(data.id + " hyperlink instantiated from url: " + data.url);
-      var hyperlink = cc.instantiate(that.hyperlinkPrefab);
-      hyperlink.name = data.id;
-      hyperlink.setPosition(data.x, data.y);
-      hyperlink.getComponent("HyperlinkManager").title = data.title;
-      hyperlink.getComponent("HyperlinkManager").url = data.url;
-      that.mediaContainer.addChild(hyperlink);
-      that.serverMedia[data.id] = data;
+      var hyperlink = new Hyperlink(data.x, data.y);
+      hyperlink.id = data.id;
+      hyperlink.title = data.title;
+      hyperlink.url = data.url;
+      that.serverMedia[data.id] = hyperlink;
     });
-    socket.on("updateMediaPosition", function(data) {
-      //var player = that.serverPlayers[data.id];
-      //player.node.x = data.x;
-      //player.node.y = data.y;
-    })
+    socket.on("updateMediaPosition", function(data){
+      that.serverMedia[data.id].sprite.sprite.position.x = data.x;
+      that.serverMedia[data.id].sprite.sprite.position.y = data.y;
+    });
+    //socket.on('uploadProgress', function(){
+    //  console.log(data);
+    //});
+    /*
     socket.on("clearMedia", function() {
       console.log("clearing all media in client");
       for (var media in that.serverMedia) {
@@ -495,33 +681,38 @@ class NetworkManager {
 }
 
 
-//ADDING LIGHT
-var light = new THREE.PointLight( 0xff0000, 1, 400 );
-light.position.set( 50, 50, 50 );
-scene.add( light );
-
 
 //BUILDING THE GAME
+
 var mainCamera = new MainCamera();
 var networkManager = new NetworkManager();
-//var audio = new Audio('assets/soundfiles/she_took_flight.wav', 0, 0);
-//var image = new Image('assets/imgs/ingame_logo.png', 1, -1);
+var tutorial = new Tutorial();
+var river = new Sprite('assets/imgs/river.png', 0, 0);
+var river2 = new Sprite('assets/imgs/river.png', 1427, 1245);
+var river3 = new Sprite('assets/imgs/river.png', 1427*2, 1245*2);
+var river4 = new Sprite('assets/imgs/river.png', -1427, -1245);
+var river5 = new Sprite('assets/imgs/river.png', -1427*2, -1245*2);
+scene.add(river.sprite);
 
-var draggableObject = [image, audio.sprite]
+var library = new Room(300, 80);
+
+//RAYCASTING
+/*
 var raycaster = new THREE.Raycaster();
 var mouse = new THREE.Vector2();
-//document.body.addEventListener('mousemove', mmm);
+window.addEventListener('click', function(e){
+	mouse.x = ( e.clientX / window.innerWidth ) * 2 - 1;
+	mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
 
-function mmm(event){
-    mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-    mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    var intersects = raycaster.intersectObjects(draggableObject);
-    intersects.forEach(function(element){
-        console.log("Intersection: " + element.object.id);
-    });
-}
-
+  raycaster.setFromCamera(mouse, camera);
+	// calculate objects intersecting the picking ray
+	var intersects = raycaster.intersectObjects( scene.children );
+	for (var i = 0; i<intersects.length; i++) {
+		//intersects[i].object.material.color.set(0xff0000);
+    //console.log(intersects[i].object.owner.owner);
+	}
+});
+*/
 
 //RENDER LOOP
 function animate() {
@@ -529,13 +720,35 @@ function animate() {
   for(var i=0; i<allNodes.length; i++){
     allNodes[i].update();
   }
-	renderer.render(scene, camera);
+  renderer.clear();
+  renderer.render(currentScene, camera);
+  renderer.clearDepth();
+  renderer.render(playersScene, camera);
+  renderer.clearDepth();
+  renderer.render(clientPlayerScene, camera);
 }
 animate();
 
 
+/* HELPER FUNCTION */
+
 function collisionsDetection(rect1, rect2){
   var collision = false;
+  var playerRadius = 20;
+  if (parseInt(rect1.position.x)-playerRadius < parseInt(rect2.position.x) + rect2.scale.x/2 &&
+    parseInt(rect1.position.x + playerRadius) > parseInt(rect2.position.x)-rect2.scale.x/2 &&
+    parseInt(rect1.position.y)-playerRadius < parseInt(rect2.position.y) + rect2.scale.y/2 &&
+    parseInt(rect1.position.y + playerRadius) > parseInt(rect2.position.y)-rect2.scale.y/2) {
+      collision = true;
+  }
+  return collision;
+}
+/*
+function collisionsDetection(rect1, rect2){
+  var collision = false;
+  console.log(rect1.scale.x, rect1.scale.y);
+  console.log('rect');
+  console.log(rect2.scale.x, rect2.scale.y);
   if (rect1.position.x < rect2.position.x + rect2.scale.x &&
     rect1.position.x + rect1.scale.x > rect2.position.x &&
     rect1.position.y < rect2.position.y + rect2.scale.y &&
@@ -544,6 +757,7 @@ function collisionsDetection(rect1, rect2){
   }
   return collision;
 }
+*/
 function canvasToWorldLoc(x, y){
   var vec = new THREE.Vector3(); // create once and reuse
   var pos = new THREE.Vector3(); // create once and reuse
@@ -558,13 +772,17 @@ function canvasToWorldLoc(x, y){
   pos.copy( camera.position ).add( vec.multiplyScalar( distance ) );
   return pos;
 }
-
+function canvasToWorldLocOrth(x, y){
+  let vector = new THREE.Vector3();
+  vector.set((x / window.innerWidth) * 2 - 1, - (y / window.innerHeight) * 2 + 1, 0);
+  vector.unproject(camera);
+  return vector;
+}
 function lerp (start, end, amt){
   return (1-amt)*start+amt*end
 }
-function map(x, in_min, in_max, out_min, out_max)
-{
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+function map(value, in_min, in_max, out_min, out_max){
+  return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 Array.prototype.remove = function() {
     var what, a = arguments, L = a.length, ax;

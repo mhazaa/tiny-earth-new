@@ -64,7 +64,7 @@ function post(mediaData, array, req, res, io){
 			console.error('Error', err)
 			return;
 		}
-		if(fields.url){
+		if(fields['url']!=undefined){ //if hyperlink
 			console.log(fields.url + ' remote ' + mediaData.consoleType + ' uploaded to server');
 			array[post.id] = post;
 			io.sockets.emit(mediaData.socketCommand, post);

@@ -1,7 +1,6 @@
 var socket = io.connect();
 
 var dom = {
-  canvas: document.getElementById('canvas'),
   lobbyInterface: document.getElementById("lobbyInterface"),
   ingameInterface: document.getElementById("ingameInterface"),
   loginForm: document.getElementById("loginForm"),
@@ -9,14 +8,18 @@ var dom = {
   icons: document.getElementsByClassName("icon"),
   chatForm: document.getElementById("chatForm"),
   chatInput: document.getElementById("chatInput"),
+  noticeText: document.getElementById("noticeText").getElementsByTagName("span"),
   imageForm: document.getElementById("imageForm"),
   audioForm: document.getElementById("audioForm"),
   hyperlinkForm: document.getElementById("hyperlinkForm"),
   uploadForms: document.getElementsByClassName('uploadForm'),
+  exitForms: document.getElementsByClassName('exitForm'),
   clear: document.getElementById("clear"),
-  clock: document.getElementById('clock'),
-  activeUsers: document.getElementById('activeUsers').getElementsByTagName('span')[0]
+  clock: document.getElementById("clock"),
+  activeUsers: document.getElementById("activeUsers").getElementsByTagName("span")[0]
 }
+
+var temporaryIcon;
 
 dom.loginForm.addEventListener('submit', function(e){
   e.preventDefault();
@@ -46,10 +49,11 @@ dom.clear.addEventListener('click', function(){
 });
 
 class UIIcon {
-  constructor(domElement, form, ajaxURL){
+  constructor(domElement, form, ajaxURL, icon){
     this.domElement = domElement;
     this.form = form;
     this.ajaxURL = ajaxURL;
+    this.icon = icon;
     this.dropPositionX = 0;
     this.dropPositionY = 0;
     this.initialX = 0;
@@ -78,6 +82,7 @@ class UIIcon {
       sendAjax('POST', that.ajaxURL, formdata);
       this.reset();
       this.style.display = 'none';
+      temporaryIcon.destroy();
     }
     function submitHyperlinks(e){
       e.preventDefault();
@@ -91,6 +96,7 @@ class UIIcon {
       sendAjax('POST', that.ajaxURL, formdata);
       this.reset();
       this.style.display = 'none';
+      temporaryIcon.destroy();
     }
   }
   setTranslate(xPos, yPos){
@@ -138,20 +144,45 @@ class UIIcon {
       that.setTranslate(0, 0);
       for(var i=0; i<dom.uploadForms.length; i++){
         dom.uploadForms[i].style.display = 'none';
+        if(temporaryIcon) temporaryIcon.destroy();
       }
       that.form.style.display = 'block';
 
-      var drop = canvasToWorldLoc(e.clientX, e.clientY);
+      var drop = canvasToWorldLocOrth(e.clientX, e.clientY);
       that.dropPositionX = Math.round(drop.x*100)/100;
       that.dropPositionY = Math.round(drop.y*100)/100;
 
-      //new Image('assets/imgs/image.png', that.dropPositionX, that.dropPositionY);
+      temporaryIcon = new Sprite(that.icon, that.dropPositionX, that.dropPositionY, 50, 50);
 
       console.log('dropPositionX: ' + that.dropPositionX + ' dropPositionY: ' + that.dropPositionY);
     }
   }
 }
 
-var image = new UIIcon(dom.icons[0], dom.imageForm, '/sendImage');
-var audio = new UIIcon(dom.icons[1], dom.audioForm, '/sendAudio');
-var hyperlink = new UIIcon(dom.icons[2], dom.hyperlinkForm, '/sendHyperlink');
+var image = new UIIcon(dom.icons[0], dom.imageForm, '/sendImage', 'assets/imgs/image.png');
+var audio = new UIIcon(dom.icons[1], dom.audioForm, '/sendAudio', 'assets/imgs/audio.png');
+var hyperlink = new UIIcon(dom.icons[2], dom.hyperlinkForm, '/sendHyperlink', 'assets/imgs/hyperlink.png');
+
+/* hide form */
+for(var i=0; i<dom.exitForms.length; i++){
+  (function(i){
+    dom.exitForms[i].addEventListener('click', function(){
+      dom.uploadForms[i].style.display = 'none';
+      temporaryIcon.destroy();
+    });
+  })(i);
+}
+window.addEventListener('touchstart', closeForm);
+window.addEventListener('mousedown', closeForm);
+function closeForm(e){
+  var activeForm = null;
+  for(var i=0; i<dom.uploadForms.length; i++){
+    if(dom.uploadForms[i].style.display=='block') activeForm=dom.uploadForms[i];
+  }
+  if (!activeForm) return;
+  if (activeForm.contains(e.target)){
+  } else{
+    activeForm.style.display = 'none';
+    temporaryIcon.destroy();
+  }
+}
