@@ -1,4 +1,7 @@
-var socket = io.connect();
+var socket = io({
+  transports: ['websocket'],
+  upgrade: false,
+});
 
 var dom = {
   lobbyInterface: document.getElementById("lobbyInterface"),

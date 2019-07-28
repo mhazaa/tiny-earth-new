@@ -7,8 +7,12 @@ var server = app.listen(PORT, '0.0.0.0', function(){
 
 app.set('view engine', 'ejs');
 app.use(express.static('views'));
+
 var socket = require('socket.io');
-var io = socket(server);
+var io = new socket(server, {
+  transports: ['websocket'],
+  upgrade: false,
+});
 
 var Player = require("./classes/Player");
 var players = [];
