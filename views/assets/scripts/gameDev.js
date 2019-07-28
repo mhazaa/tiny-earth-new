@@ -2,12 +2,6 @@ var raycaster = new THREE.Raycaster();
 var allNodes = [];
 var clientPlayer;
 var currentScene;
-var collisionGroups = {
-  audioArea: [],
-  imageArea: [],
-  hyperlinkArea: [],
-  roomArea: []
-}
 
 //MOUSE CONTROLS
 var keyState = {};
@@ -104,10 +98,9 @@ class Node {
 
 //networkIdentity
 class NetworkIdentity {
-  constructor(owner){
+  constructor(){
     this.id = null;
     this.controlling = false;
-    this.owner = owner;
   }
   setNetworkId(id, clientId) {
     this.id = id;
@@ -130,12 +123,12 @@ class Player extends Node {
     });*/
     this.material = new THREE.MeshBasicMaterial( { color: 0x4f3a1d } );
     this.node = new THREE.Mesh(this.geometry, this.material);
-    this.networkIdentity = new NetworkIdentity(this);
+    this.networkIdentity = new NetworkIdentity();
     this.username = null;
     this.speed = 3;
   }
   destroy(){
-    scene.remove(this.node);
+    playersScene.remove(this.node);
     this.geometry.dispose();
     this.material.dispose();
     this.node = undefined;
@@ -175,62 +168,10 @@ class Player extends Node {
       var drop = canvasToWorldLocOrth(e.clientX, e.clientY);
     })
   }
-  collisions(){
-    for(var i=0; i<collisionGroups.audioArea.length; i++){
-      var audioCA = collisionGroups.audioArea[i];
-      audioCA.onEnter = function(){
-        console.log('audio area entered');
-        audioCA.owner.audio.play();
-      }
-      audioCA.onExit = function(){
-        console.log('audio area exited');
-        audioCA.owner.audio.pause();
-      }
-    }
-    for(var i=0; i<collisionGroups.imageArea.length; i++){
-      var imageCA = collisionGroups.imageArea[i];
-      imageCA.onEnter = function(){
-        console.log('image area entered');
-        imageCA.owner.highlighted = true;
-      }
-      imageCA.onExit = function(){
-        console.log('image area exited');
-        imageCA.owner.highlighted = false;
-      }
-    }
-    for(var i=0; i<collisionGroups.hyperlinkArea.length; i++){
-      var hyperlinkCA = collisionGroups.hyperlinkArea[i];
-      hyperlinkCA.onEnter = function(){
-        console.log('hyperlink area entered');
-        hyperlinkCA.owner.highlighted = true;
-        dom.noticeText[1].innerHTML = 'Click on the hyperlink to go to the url';
-      }
-      hyperlinkCA.onExit = function(){
-        console.log('hyprlink area exited');
-        hyperlinkCA.owner.highlighted = false;
-        dom.noticeText[1].innerHTML = '';
-      }
-    }
-    for(var i=0; i<collisionGroups.roomArea.length; i++){
-      var roomCA = collisionGroups.roomArea[i];
-      roomCA.onEnter = function(){
-        console.log('room area entered');
-        roomCA.owner.inCollision = true;
-        dom.noticeText[1].innerHTML = 'click [E] to enter room: ' + roomCA.owner.roomName;
-      }
-      roomCA.onExit = function(){
-        if(currentScene!=scene) return;
-        console.log('room area exited');
-        roomCA.owner.inCollision = false;
-        dom.noticeText[1].innerHTML = '';
-      }
-    }
-  }
   update(){
     if(!this.networkIdentity.controlling) return;
     this.movement();
     this.updatePosition();
-    this.collisions();
   }
 }
 
@@ -282,7 +223,7 @@ class MainCamera extends Node {
 
 //collision area
 class CollisionArea extends THREE.Sprite {
-  constructor(owner, collisionGroup, x, y, w, h){
+  constructor(x, y, w, h){
     super(new THREE.SpriteMaterial({ color: '#69f' }));
     if(typeof w != undefined) this.scale.x = w;
     if(typeof h != undefined) this.scale.y = h;
@@ -290,8 +231,6 @@ class CollisionArea extends THREE.Sprite {
     scene.add(this);
     this.material.opacity = 0;
     this.position.set(x, y, 1);
-    this.owner = owner;
-    collisionGroup.push(this);
     this.inside = false;
   }
   collision(){
@@ -329,10 +268,15 @@ class Sprite {
         that.sprite.scale.x = tex.image.width;
         that.sprite.scale.y = tex.image.height;
       }
-      if(typeof h == 'undefined' && tex.image.width>w) {
-        var ratio = tex.image.height/tex.image.width;
-        that.sprite.scale.x = w;
-        that.sprite.scale.y = w*ratio;
+      if(typeof h == 'undefined'){
+        if(tex.image.width>w){
+          var ratio = tex.image.height/tex.image.width;
+          that.sprite.scale.x = w;
+          that.sprite.scale.y = w*ratio;
+        } else {
+          that.sprite.scale.x = tex.image.width;
+          that.sprite.scale.y = tex.image.height;
+        }
       }
       //tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       //tex.offset.set(1, 1);
@@ -446,9 +390,18 @@ class Media {
 class Image extends Media {
   constructor(path, x, y){
     super();
+    var that = this;
     this.highlighted = false;
     this.sprite = new Sprite(path, x, y, 500);
-    this.collisionArea = new CollisionArea(this, collisionGroups.imageArea, x, y);
+    this.collisionArea = new CollisionArea(x, y);
+    this.collisionArea.onEnter = function(){
+      console.log('image area entered');
+      that.highlighted = true;
+    }
+    this.collisionArea.onExit = function(){
+      console.log('image area exited');
+      that.highlighted = false;
+    }
     this.draggable('images');
   }
   update(){
@@ -474,7 +427,15 @@ class Audio extends Media {
       that.audio.setLoop(true);
     });
     this.sprite = new Sprite('assets/imgs/audio.png', x, y, 150, 150);
-    this.collisionArea = new CollisionArea(this, collisionGroups.audioArea, x, y, 300, 300);
+    this.collisionArea = new CollisionArea(x, y, 300, 300);
+    this.collisionArea.onEnter = function(){
+      console.log('audio area entered');
+      that.audio.play();
+    }
+    this.collisionArea.onExit = function(){
+      console.log('audio area exited');
+      that.audio.pause();
+    }
     this.draggable('audios');
   }
   update(){
@@ -494,7 +455,17 @@ class Hyperlink extends Media {
     this.url = null
     this.highlighted = false;
     this.sprite = new Sprite('assets/imgs/hyperlink.png', x, y, 150, 150);
-    this.collisionArea = new CollisionArea(this, collisionGroups.hyperlinkArea, x, y, 300, 300);
+    this.collisionArea = new CollisionArea(x, y, 300, 300);
+    this.collisionArea.onEnter = function(){
+      console.log('hyperlink area entered');
+      that.highlighted = true;
+      dom.noticeText[1].innerHTML = 'Click on the hyperlink to go to the url';
+    }
+    this.collisionArea.onExit = function(){
+      console.log('hyprlink area exited');
+      that.highlighted = false;
+      dom.noticeText[1].innerHTML = '';
+    }
     this.draggable('hyperlinks', function(){
       window.open(that.url);
     });
@@ -513,13 +484,25 @@ class Hyperlink extends Media {
 class Room extends Media {
   constructor(x, y){
     super();
+    var that = this;
     this.scene = new THREE.Scene();
     this.roomName = null;
     this.sprite = new Sprite('assets/imgs/room.png', x, y, 150, 150);
-    this.collisionArea = new CollisionArea(this, collisionGroups.roomArea, x, y, 300, 300);
+    this.collisionArea = new CollisionArea(x, y, 300, 300);
     this.inCollision = false;
     this.insideRoom = false;
     this.input();
+    this.collisionArea.onEnter = function(){
+      console.log('room area entered');
+      that.inCollision = true;
+      dom.noticeText[1].innerHTML = 'click [E] to enter room: ' + that.roomName;
+    }
+    this.collisionArea.onExit = function(){
+      if(currentScene!=scene) return;
+      console.log('room area exited');
+      that.inCollision = false;
+      dom.noticeText[1].innerHTML = '';
+    }
     this.draggable('rooms');
   }
   input(){
@@ -621,29 +604,28 @@ class NetworkManager {
     });
     socket.on("spawn", function(data) {
       console.log(data.id + " spawned in game with username: " + data.username);
-      var player = new Player();
-      player.node.position.set(data.x, data.y, 0);
-      player.username = data.username;
-      player.networkIdentity.setNetworkId(data.id, that.clientId);
-      that.serverPlayers[data.id] = player.networkIdentity;
-      if(player.networkIdentity.controlling){
-        mainCamera.setTarget(player);
-        player.input();
-        clientPlayer = player;
-        clientPlayerScene.add(player.node);
+      that.serverPlayers[data.id] = new Player();
+      that.serverPlayers[data.id].node.position.set(data.x, data.y, 0);
+      that.serverPlayers[data.id].username = data.username;
+      that.serverPlayers[data.id].networkIdentity.setNetworkId(data.id, that.clientId);
+
+      if(that.serverPlayers[data.id].networkIdentity.controlling){
+        mainCamera.setTarget(that.serverPlayers[data.id]);
+        that.serverPlayers[data.id].input();
+        clientPlayer = that.serverPlayers[data.id];
+        clientPlayerScene.add(that.serverPlayers[data.id].node);
       } else {
-        playersScene.add(player.node);
+        playersScene.add(that.serverPlayers[data.id].node);
       }
     });
     socket.on("disconnected", function(data) {
       console.log(data.id + " disconnected from game");
-      that.serverPlayers[data.id].owner.destroy();
+      that.serverPlayers[data.id].destroy();
       delete that.serverPlayers[data.id];
     });
     socket.on("updatePosition", function(data) {
-      var player = that.serverPlayers[data.id];
-      player.owner.node.position.x = data.x;
-      player.owner.node.position.y = data.y;
+      that.serverPlayers[data.id].node.position.x = data.x;
+      that.serverPlayers[data.id].node.position.y = data.y;
     });
     socket.on('updateActivePlayers', function(data){
       dom.activeUsers.innerHTML = data;
