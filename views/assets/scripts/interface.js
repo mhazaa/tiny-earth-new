@@ -12,6 +12,7 @@ var dom = {
   imageForm: document.getElementById("imageForm"),
   audioForm: document.getElementById("audioForm"),
   hyperlinkForm: document.getElementById("hyperlinkForm"),
+  roomForm: document.getElementById("roomForm"),
   uploadForms: document.getElementsByClassName('uploadForm'),
   exitForms: document.getElementsByClassName('exitForm'),
   clear: document.getElementById("clear"),
@@ -66,6 +67,8 @@ class UIIcon {
     var that = this;
     if(this.ajaxURL == '/sendHyperlink'){
       this.form.addEventListener('submit', submitHyperlinks);
+    } else if(this.ajaxURL == '/sendRoom'){
+      this.form.addEventListener('submit', submitRoom);
     } else {
       this.form.addEventListener('submit', submitMedia);
     }
@@ -79,6 +82,18 @@ class UIIcon {
       formdata.append('y', that.dropPositionY);
       formdata.append('remoteFileURL', remoteFile.value);
       if(localFile) formdata.append("localFile", localFile);
+      sendAjax('POST', that.ajaxURL, formdata);
+      this.reset();
+      this.style.display = 'none';
+      temporaryIcon.destroy();
+    }
+    function submitRoom(e){
+      e.preventDefault();
+      var roomName = this.getElementsByClassName('input')[0];
+      var formdata = new FormData();
+      formdata.append('roomName', roomName.value);
+      formdata.append('x', that.dropPositionX);
+      formdata.append('y', that.dropPositionY);
       sendAjax('POST', that.ajaxURL, formdata);
       this.reset();
       this.style.display = 'none';
@@ -162,6 +177,7 @@ class UIIcon {
 var image = new UIIcon(dom.icons[0], dom.imageForm, '/sendImage', 'assets/imgs/image.png');
 var audio = new UIIcon(dom.icons[1], dom.audioForm, '/sendAudio', 'assets/imgs/audio.png');
 var hyperlink = new UIIcon(dom.icons[2], dom.hyperlinkForm, '/sendHyperlink', 'assets/imgs/hyperlink.png');
+var room = new UIIcon(dom.icons[3], dom.roomForm, '/sendRoom', 'assets/imgs/room.png');
 
 /* hide form */
 for(var i=0; i<dom.exitForms.length; i++){

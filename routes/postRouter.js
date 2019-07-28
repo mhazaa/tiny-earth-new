@@ -21,12 +21,19 @@ var hyperlinkData = {
 	socketCommand: 'sendHyperlink',
 	consoleType: 'hyperlink'
 }
+var roomData = {
+	class: Media.Room,
+	socketCommand: 'sendRoom',
+	consoleType: 'room'
+}
 var images = [];
 var audios = [];
 var hyperlinks = [];
+var rooms = [];
 module.exports.images = images;
 module.exports.audios = audios;
 module.exports.hyperlinks = hyperlinks;
+module.exports.hyperlinks = rooms;
 
 module.exports.route = function(app, io){
 	app.post('/sendImage', function(req, res){
@@ -40,12 +47,16 @@ module.exports.route = function(app, io){
 	app.post('/sendHyperlink', function(req, res){
 		post(hyperlinkData, hyperlinks, req, res, io);
 	});
+	app.post('/sendRoom', function(req, res){
+		post(roomData, rooms, req, res, io);
+	});
 
 	app.post('/clearMedia', function(req, res){
 		console.log('clearing all media');
 		io.sockets.emit('clearMedia');
 		images = [];
 		audios = [];
+		hyperlinks = [];
 		clearFolder(imageData.folder);
 		clearFolder(audioData.folder);
 		res.end();
@@ -66,6 +77,13 @@ function post(mediaData, array, req, res, io){
 		}
 		if(fields['url']!=undefined){ //if hyperlink
 			console.log(fields.url + ' remote ' + mediaData.consoleType + ' uploaded to server');
+			array[post.id] = post;
+			io.sockets.emit(mediaData.socketCommand, post);
+			res.end();
+			return;
+		}
+		if(fields['roomName']!=undefined){ //if room
+			console.log(fields.roomName + ' remote ' + mediaData.consoleType + ' uploaded to server');
 			array[post.id] = post;
 			io.sockets.emit(mediaData.socketCommand, post);
 			res.end();

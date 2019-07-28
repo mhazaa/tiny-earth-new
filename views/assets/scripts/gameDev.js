@@ -135,12 +135,11 @@ class Player extends Node {
     this.speed = 3;
   }
   destroy(){
-    console.log('deeestroy');
     scene.remove(this.node);
     this.geometry.dispose();
     this.material.dispose();
     this.node = undefined;
-    allNodes.remove(this)
+    allNodes.remove(this);
   }
   movement(){
     if(keyState[68] || keyState[39]){
@@ -216,10 +215,13 @@ class Player extends Node {
       var roomCA = collisionGroups.roomArea[i];
       roomCA.onEnter = function(){
         console.log('room area entered');
-        dom.noticeText[1].innerHTML = 'click [E] to enter library';
+        roomCA.owner.inCollision = true;
+        dom.noticeText[1].innerHTML = 'click [E] to enter room: ' + roomCA.owner.roomName;
       }
       roomCA.onExit = function(){
+        if(currentScene!=scene) return;
         console.log('room area exited');
+        roomCA.owner.inCollision = false;
         dom.noticeText[1].innerHTML = '';
       }
     }
@@ -327,6 +329,11 @@ class Sprite {
         that.sprite.scale.x = tex.image.width;
         that.sprite.scale.y = tex.image.height;
       }
+      if(typeof h == 'undefined' && tex.image.width>w) {
+        var ratio = tex.image.height/tex.image.width;
+        that.sprite.scale.x = w;
+        that.sprite.scale.y = w*ratio;
+      }
       //tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       //tex.offset.set(1, 1);
       //tex.repeat.set(5, 5);
@@ -430,6 +437,9 @@ class Media {
       }
     }
   }
+  update(){
+
+  }
 }
 
 //image
@@ -437,7 +447,7 @@ class Image extends Media {
   constructor(path, x, y){
     super();
     this.highlighted = false;
-    this.sprite = new Sprite(path, x, y);
+    this.sprite = new Sprite(path, x, y, 500);
     this.collisionArea = new CollisionArea(this, collisionGroups.imageArea, x, y);
     this.draggable('image');
   }
@@ -500,21 +510,32 @@ class Hyperlink extends Media {
   }
 }
 
-class Room {
+class Room extends Media {
   constructor(x, y){
-    //allNodes.push(this);
-    this.id = null;
+    super();
     this.scene = new THREE.Scene();
-    this.sprite = new Sprite('assets/imgs/home.png', x, y, 150, 150);
+    this.roomName = null;
+    this.sprite = new Sprite('assets/imgs/room.png', x, y, 150, 150);
     this.collisionArea = new CollisionArea(this, collisionGroups.roomArea, x, y, 300, 300);
+    this.inCollision = false;
+    this.insideRoom = false;
     this.input();
   }
   input(){
     var that = this;
     document.addEventListener('keyup', function(e){
+      if(!that.inCollision) return;
       var keyCode = e.keyCode;
       if(keyCode==69){
-        currentScene = that.scene;
+        if(!that.insideRoom){
+          currentScene = that.scene;
+          dom.noticeText[1].innerHTML = 'click [E] to go back outside';
+          that.insideRoom = true;
+        } else {
+          currentScene = scene;
+          dom.noticeText[1].innerHTML = '';
+          that.insideRoom = false;
+        }
       }
     });
   }
@@ -585,8 +606,8 @@ class Tutorial {
 class NetworkManager {
   constructor(){
     this.clientId = null;
-    this.serverPlayers = [];
-    this.serverMedia = [];
+    this.serverPlayers = {};
+    this.serverMedia = {};
     this.imagesFolder = "downloadedAssets/imgs";
     this.audioFolder = "downloadedAssets/audio";
     this.socketEvents();
@@ -641,42 +662,43 @@ class NetworkManager {
     socket.on("sendImage", function(data){
       console.log(data.name + " img  instantiated");
       var path = that.imagesFolder + '/' + data.name;
-      var image = new Image(path, data.x, data.y);
-      image.id = data.id;
-      that.serverMedia[data.id] = image;
+      that.serverMedia[data.id] = new Image(path, data.x, data.y);
+      that.serverMedia[data.id].id = data.id;
     });
     socket.on("sendAudio", function(data){
       console.log(data.name + " audio  instantiated");
       var path = that.audioFolder + '/' + data.name;
-      var audio = new Audio(path, data.x, data.y);
-      audio.id = data.id;
-      that.serverMedia[data.id] = audio;
+      that.serverMedia[data.id] = new Audio(path, data.x, data.y);
+      that.serverMedia[data.id].id = data.id;
     });
     socket.on("sendHyperlink", function(data){
       console.log(data.id + " hyperlink instantiated from url: " + data.url);
-      var hyperlink = new Hyperlink(data.x, data.y);
-      hyperlink.id = data.id;
-      hyperlink.title = data.title;
-      hyperlink.url = data.url;
-      that.serverMedia[data.id] = hyperlink;
+      that.serverMedia[data.id] = new Hyperlink(data.x, data.y);
+      that.serverMedia[data.id].id = data.id;
+      that.serverMedia[data.id].title = data.title;
+      that.serverMedia[data.id].url = data.url;
+    });
+    socket.on("sendRoom", function(data){
+      console.log(data.id + " room instantiated with name: " + data.roomName);
+      that.serverMedia[data.id] = new Room(data.x, data.y);
+      that.serverMedia[data.id].id = data.id;
+      that.serverMedia[data.id].roomName = data.roomName;
     });
     socket.on("updateMediaPosition", function(data){
       that.serverMedia[data.id].sprite.sprite.position.x = data.x;
       that.serverMedia[data.id].sprite.sprite.position.y = data.y;
     });
+    socket.on("clearMedia", function() {
+      console.log("clearing all media in client");
+      console.log(that.serverMedia);
+      for (var media in that.serverMedia) {
+        //that.serverMedia[media].sprite.destroy();
+      }
+      //that.serverMedia = {};
+    });
     //socket.on('uploadProgress', function(){
     //  console.log(data);
     //});
-    /*
-    socket.on("clearMedia", function() {
-      console.log("clearing all media in client");
-      for (var media in that.serverMedia) {
-        var name = that.serverMedia[media].id;
-        that.mediaContainer.getChildByName(name).destroy();
-        delete that.serverMedia[name];
-      }
-    });
-    */
   }
 }
 
@@ -694,7 +716,7 @@ var river4 = new Sprite('assets/imgs/river.png', -1427, -1245);
 var river5 = new Sprite('assets/imgs/river.png', -1427*2, -1245*2);
 scene.add(river.sprite);
 
-var library = new Room(300, 80);
+
 
 //RAYCASTING
 /*
@@ -723,8 +745,10 @@ function animate() {
   renderer.clear();
   renderer.render(currentScene, camera);
   renderer.clearDepth();
-  renderer.render(playersScene, camera);
-  renderer.clearDepth();
+  if(currentScene==scene){
+    renderer.render(playersScene, camera);
+    renderer.clearDepth();
+  }
   renderer.render(clientPlayerScene, camera);
 }
 animate();

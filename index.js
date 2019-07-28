@@ -126,5 +126,8 @@ io.on('connect', function(socket){
 		for(var hyperlink in postRouter.hyperlinks) {
 			socket.emit('sendHyperlink', postRouter.hyperlinks[hyperlink]);
 		}
+		for(var room in postRouter.rooms) {
+			socket.emit('sendRoom', postRouter.rooms[room]);
+		}
 	}
 });

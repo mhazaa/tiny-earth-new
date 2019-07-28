@@ -183,6 +183,7 @@ form .submit:hover, button:hover {
 }
 
 #clear {
+  display: none;
   position: absolute;
   bottom: 0;
   right: 0;

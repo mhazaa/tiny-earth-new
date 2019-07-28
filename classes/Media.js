@@ -19,3 +19,9 @@ module.exports.Hyperlink = function(){
   this.x = 0;
   this.y = 0;
 }
+module.exports.Room = function(){
+  this.id = shortID.generate();
+  this.name = '';
+  this.x = 0;
+  this.y = 0;
+}
