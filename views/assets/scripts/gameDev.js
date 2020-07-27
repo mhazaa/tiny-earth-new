@@ -1,95 +1,205 @@
-var raycaster = new THREE.Raycaster();
 var allNodes = [];
 var clientPlayer;
-var currentScene;
-
-//MOUSE CONTROLS
-var keyState = {};
-document.addEventListener('keydown', function(e){
-  var keyCode = e.keyCode;
-  keyState[keyCode] = true;
-});
-document.addEventListener('keyup', function(e){
-  var keyCode = e.keyCode;
-  keyState[keyCode] = false;
-});
-
-//SETTING UP RENDERER, CAMERA, AND SCENE
-var scene = new THREE.Scene();
-currentScene = scene;
-var playersScene = new THREE.Scene();
-var clientPlayerScene = new THREE.Scene();
-var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+//LOADERS
+var textureLoader = new THREE.TextureLoader();
+//SETTING UP SCENES
+var scenes = {
+  playerScene: new THREE.Scene(),
+  mainScene: new THREE.Scene()
+}
+for(var key in scenes){
+  scenes[key].name = key;
+}
+var currentScene = scenes['mainScene'];
+//SETTING UP RENDERER
+var renderer = new THREE.WebGLRenderer({ alpha: true });
 renderer.autoClear = false;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.domElement.id = 'canvas';
 document.body.appendChild(renderer.domElement);
-
-//SETTING UP ORTHOGRAPHIC CAMERA
-var w = window.innerWidth;
-var h = window.innerHeight;
-var viewSize = h;
-var aspectRatio = w / h;
-var viewport = {
-    viewSize: viewSize,
-    aspectRatio: aspectRatio,
-    left: (-aspectRatio * viewSize) / 2,
-    right: (aspectRatio * viewSize) / 2,
-    top: viewSize / 2,
-    bottom: -viewSize / 2,
-    near: -1000,
-    far: 1000
-}
-var camera = new THREE.OrthographicCamera (
-    viewport.left,
-    viewport.right,
-    viewport.top,
-    viewport.bottom,
-    viewport.near,
-    viewport.far
-);
-
-//RESIZING RENDERER WITHOUT SCALING FOR ORTHOGRAPHIC CAMERA CAMERA
-window.addEventListener('resize', function(){
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.render(scene, camera);
-
-    camera.left = -window.innerWidth / 2;
-    camera.right = window.innerWidth /2;
-    camera.top = window.innerHeight / 2;
-    camera.bottom = -window.innerHeight / 2;
-    camera.updateProjectionMatrix();
-});
+//CAMERA
+var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
 
 //RESIZING RENDERER WITHOUT SCALING FOR PERSPECTIVE CAMERA
-/*
 var tanFOV = Math.tan( ( ( Math.PI / 180 ) * camera.fov / 2 ) );
 var windowHeight = window.innerHeight;
-window.addEventListener('resize', function (){
-    //camera.aspect = window.innerWidth / window.innerHeight;
-    //camera.fov = (360 / Math.PI) * Math.atan(tanFOV * (window.innerHeight / windowHeight));
-    //camera.updateProjectionMatrix();
+window.addEventListener('resize', function(){
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.fov = (360 / Math.PI) * Math.atan(tanFOV * (window.innerHeight / windowHeight));
+    camera.updateProjectionMatrix();
 
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.render(scene, camera);
+    renderer.render(currentScene, camera);
 });
-*/
 
-//CREATER AUDIO LISTERNER AND ADD IT TO CAMERA
-var audioListener = new THREE.AudioListener();
-camera.add(audioListener);
+//CONTROLS
+var keyState = {};
+var controlEvents = function(){
+  document.addEventListener('keydown', function(e){
+    var keyCode = e.keyCode;
+    keyState[keyCode] = true;
+  });
+  document.addEventListener('keyup', function(e){
+    var keyCode = e.keyCode;
+    keyState[keyCode] = false;
+  });
+}
 
-//LOADERS
-var textureLoader = new THREE.TextureLoader();
-var audioLoader = new THREE.AudioLoader();
+//RAYCAST EVENTS
+var raycaster = new THREE.Raycaster();
+var otherPlayersMeshes = [];
+var selectableItems = [];
+var transformableItems = [];
 
+var clickOrDrag = 0;
+var raycastEvents = function(){
+  var mouse = new THREE.Vector2();
+  var held = false;
+  var resizing = false;
+  var pivotX=0, pivotY=0;
+  var clickLoc;
+  var initialScale = {x: 0, y:0}
+  var transformable = null;
+  var selectedItem = null;
 
+  window.addEventListener('mousedown', dragStart);
+  window.addEventListener('touchstart', dragStart);
+  window.addEventListener('mousemove', drag);
+  window.addEventListener('touchmove', drag);
+  window.addEventListener('mouseup', dragEnd);
+  window.addEventListener('touchend', dragEnd);
 
+  function dragStart(e){
+    clickOrDrag = 0;
+    var clientX=0, clientY=0;
+    if (e.type === "touchstart") {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    mouse.x = ( clientX / window.innerWidth ) * 2 - 1;
+    mouse.y = - ( clientY / window.innerHeight ) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    var itemsIntersected = raycaster.intersectObjects(selectableItems);
+    var transformableItemsIntersected = raycaster.intersectObjects(transformableItems);
+
+    var otherPlayersIntersected = raycaster.intersectObjects(otherPlayersMeshes);
+    var clientPlayerIntersected = raycaster.intersectObjects([clientPlayer.mesh]);
+
+    if(transformableItemsIntersected.length>0){
+      held = true;
+      clickLoc = canvasToWorldLoc(clientX, clientY);
+      for(var i=0; i<transformableItemsIntersected.length; i++){
+        transformable = transformableItemsIntersected[i].object.parent;
+        pivotX = clickLoc.x-transformable.position.x;
+        pivotY = clickLoc.y-transformable.position.y;
+
+        if(!transformable.scalable) return;
+
+        var point = transformableItemsIntersected[i].point;
+        var leftEdge = transformable.position.x - transformable.collisionArea.scale.x/2;
+        var rightEdge = transformable.position.x + transformable.collisionArea.scale.x/2;
+        var topEdge = transformable.position.y + transformable.collisionArea.scale.y/2;
+        var bottomEdge = transformable.position.y - transformable.collisionArea.scale.y/2;
+
+        if(
+          (point.x < leftEdge+10 || point.x > rightEdge-10) &&
+          (point.y < topEdge+10 || point.y > bottomEdge-10)
+        ){
+          resizing = true;
+          initialScale.x = transformable.scale.x;
+          initialScale.y = transformable.scale.y;
+        }
+      }
+    } else if(transformable){
+      transformable.disableTransform();
+      transformable = null;
+    }
+
+    if(itemsIntersected.length>0){
+      if(transformable) return;
+      if(selectedItem) selectedItem.unhighlight();
+      selectedItem = itemsIntersected[0].object.parent;
+      selectedItem.highlight();
+      optionsMenu.activate('options', selectedItem.options);
+    } else {
+      if(selectedItem){
+        selectedItem.unhighlight();
+        selectedItem = null;
+      }
+    }
+
+    if(clientPlayerIntersected.length>0){
+      colorChanger.dom.colorSelectIngame.style.display = 'block';
+    }
+
+    if(otherPlayersIntersected.length>0){
+      var receiverId = otherPlayersIntersected[0].object.parent.networkIdentity.id;
+      clientPlayer.requestTether(receiverId);
+    }
+  }
+  function drag(e){
+    clickOrDrag = 1;
+    if(held){
+      var clientX = 0, clientY=0;
+      if (e.type === "touchmove") {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      var loc = canvasToWorldLoc(clientX, clientY);
+
+      if(resizing){
+        var newScale = {
+          x: (loc.x-clickLoc.x)/100,
+          y: (loc.y-clickLoc.y)/100
+        }
+        newScale.x = Math.round(newScale.x*100)/100;
+        newScale.y = Math.round(newScale.y*100)/100;
+        transformable.scale.x = initialScale.x + newScale.x;
+        transformable.scale.y = initialScale.y + newScale.y;
+        if(transformable.scale.x<1) transformable.scale.x = 1;
+        if(transformable.scale.y<1) transformable.scale.y = 1;
+      } else {
+        var newPosition = {
+          x: loc.x - pivotX,
+          y: loc.y - pivotY
+        }
+        newPosition.x = Math.round(newPosition.x*100)/100;
+        newPosition.y = Math.round(newPosition.y*100)/100;
+        transformable.position.x = newPosition.x;
+        transformable.position.y = newPosition.y;
+
+        socket.emit('updateItemPosition', {
+          itemType: transformable.itemType,
+          itemId: transformable.itemId,
+          x: transformable.position.x,
+          y: transformable.position.y
+        });
+      }
+    }
+  }
+  function dragEnd(){
+    if(held){
+      held = false;
+      resizing = false;
+    }
+  }
+}
 
 /* INGAME CLASSES */
 
-class Node {
-  constructor(){
+class Node extends THREE.Object3D {
+  constructor(x,y,scene){
+    super();
+    this.position.set(x,y,0);
+    scenes[scene].add(this);
     allNodes.push(this);
   }
   update(){
@@ -100,142 +210,535 @@ class Node {
 class NetworkIdentity {
   constructor(){
     this.id = null;
+    this.peerId = null;
     this.controlling = false;
   }
-  setNetworkId(id, clientId) {
-    this.id = id;
-    if(id == clientId){
-      this.controlling = true;
-    }
+}
+
+//network network manager
+//networkManager
+class NetworkManager {
+  constructor(){
+    this.serverPlayers = {};
+    this.serverItems = {};
+    this.downloadedAssets = "downloadedAssets";
+    this.lobbyEvents();
+    this.peerEvents();
+    this.peerConnection = null;
+  }
+  peerEvents(){
+  }
+  lobbyEvents(){
+    var that = this;
+
+    socket.on('register', function(data){
+      console.log(data.id + ' connected to server');
+    });
+
+    socket.on('spawn', function(data){
+      console.log(data.id + ' spawned in game with username: ' + data.username);
+      that.serverPlayers[data.id] = new Player(data.username, 'playerScene');
+      that.serverPlayers[data.id].networkIdentity.id = data.id;
+      that.serverPlayers[data.id].networkIdentity.peerId = data.peerId;
+      that.serverPlayers[data.id].networkIdentity.controlling = true;
+      that.serverPlayers[data.id].setPosFromCoors(data.x, data.y);
+
+      that.serverPlayers[data.id].changeColor(data.color);
+
+      cameraManager.setTarget(that.serverPlayers[data.id]);
+      that.serverPlayers[data.id].input();
+      clientPlayer = that.serverPlayers[data.id];
+      raycastEvents();
+      controlEvents();
+      bgmusic.play();
+      that.ingameEvents();
+    });
+
+    socket.on('disconnected', function(data){
+      if(that.serverPlayers[data.id]){
+        console.log(data.id + ' disconnected from game');
+        if(clientPlayer && clientPlayer.tetheredTo == that.serverPlayers[data.id]) clientPlayer.destroyTether();
+        that.serverPlayers[data.id].destroy();
+        delete that.serverPlayers[data.id];
+      }
+    });
+  }
+  ingameEvents(){
+    var that = this;
+
+    socket.on('spawnOtherPlayers', function(data){
+      console.log(data.id + ' spawned in game with username: ' + data.username);
+      that.serverPlayers[data.id] = new Player(data.username, data.scene);
+      that.serverPlayers[data.id].networkIdentity.id = data.id;
+      that.serverPlayers[data.id].networkIdentity.peerId = data.peerId;
+      that.serverPlayers[data.id].position.x = data.x;
+      that.serverPlayers[data.id].position.y = data.y;
+      that.serverPlayers[data.id].changeColor(data.color);
+      that.serverPlayers[data.id].changeText(data.text);
+
+      otherPlayersMeshes.push(that.serverPlayers[data.id].mesh);
+    });
+
+    socket.on('updatePosition', function(data){
+      that.serverPlayers[data.id].position.x = data.x;
+      that.serverPlayers[data.id].position.y = data.y;
+    });
+    socket.on('updateColor', function(data){
+      that.serverPlayers[data.id].changeColor(data.color);
+    });
+    socket.on('updateActivePlayers', function(data){
+      dom.activeUsers.innerHTML = data;
+    });
+    socket.on('updateTime', function(data){
+      dom.clock.innerHTML = 'day: ' + data.day + ' time: ' + data.hours + ':' + data.minutes + ':' + data.seconds;
+      /*var dayOpacity = map(data.seconds, 4, 5, 1, 0);
+      dom.backgrounds[3].style.opacity = dayOpacity;
+      var sunsetOpacity = map(data.seconds, 5, 6, 1, 0);
+      dom.backgrounds[2].style.opacity = sunsetOpacity;
+      var nightOpacity = map(data.seconds, 7, 8, 1, 0);
+      dom.backgrounds[1].style.opacity = nightOpacity;*/
+    });
+
+    socket.on('requestTether', function(data){
+      var requesterId = data.requesterId;
+      console.log(requesterId + ' is requesting tethering with you');
+
+      var options = [
+        {
+          text: 'yes',
+          function: function(){
+            socket.emit('acceptTether', {requesterId: requesterId, receiverId: clientPlayer.networkIdentity.id});
+            if(clientPlayer.tetheredTo) destroyTether();
+            clientPlayer.createTether(that.serverPlayers[requesterId]);
+          }
+        },
+        {
+          text: 'no',
+          function: function(){}
+        }
+      ]
+
+      optionsMenu.activate(requesterId + ' wants to connect with you. Accept?', options);
+    });
+    socket.on('acceptTether', function(data){
+      console.log(data.receiverId + ' accepteed tethering with you');
+      clientPlayer.createTether(that.serverPlayers[data.receiverId]);
+      var receiverIdPeerId = that.serverPlayers[data.receiverId].peerId;
+      this.peerConnection = peer.connect(receiverIdPeerId);
+
+      this.peerConnection.on('open', function(){
+        console.log('connection opened');
+        conn.on('data', function(data) {
+          console.log('Received', data);
+        });
+        window.addEventListener('click', function(){
+          console.log('sss');
+          conn.send('Hello!');
+        });
+      });
+
+      peer.on('connection', function(conn){
+        console.log(conn.id + ' peered with you');
+
+      /*  conn.on('open', function(){
+          console.log('connection opened');
+          conn.on('data', function(data) {
+            console.log('Received', data);
+          });
+          window.addEventListener('click', function(){
+            console.log('sss');
+            conn.send('Hello!');
+          });
+        });*/
+      });
+
+
+    });
+
+    socket.on('sendText', function(data){
+      that.serverPlayers[data.id].changeText(data.text);
+    });
+
+    socket.on('switchScene', function(data){
+      that.serverPlayers[data.id].switchScene(data.scene);
+    });
+
+    socket.on('updateItemPosition', function(data){
+      that.serverItems[data.itemId].position.x = data.x;
+      that.serverItems[data.itemId].position.y = data.y;
+    });
+    socket.on('removeItem', function(data){
+      that.serverItems[data.itemId].destroy();
+    });
+    socket.on('addInternalPortal', function(data){
+      that.serverItems[data.itemId].internalPortal = new InternalPortal(data.x, data.y, that.serverItems[data.itemId]);
+    });
+
+    socket.on('sendItem', function(data){
+      console.log(data.id + ' added to ' + data.itemType + 's');
+
+      switch(data.itemType){
+        case 'image':
+          var path = that.downloadedAssets + '/' + data.name;
+          that.serverItems[data.id] = new BongoImage(path, data.x, data.y, data.scene);
+          break;
+        case 'audio':
+          var path = that.downloadedAssets + '/' + data.name;
+          that.serverItems[data.id] = new BongoAudio(path, data.x, data.y, data.scene);
+          break;
+        case 'room':
+          that.serverItems[data.id] = new BongoRoom(data.roomName, data.x, data.y, data.scene);
+          break;
+        case 'portal':
+          that.serverItems[data.id] = new BongoPortal(data.x, data.y, data.portalX, data.portalY, data.scene);
+          break;
+        case 'text':
+          that.serverItems[data.id] = new BongoText(data.text, data.x, data.y, data.size, data.scene);
+          break;
+        case 'iframe':
+          that.serverItems[data.id] = new DomIframe(data.url, data.x, data.y);
+          break;
+      }
+
+      that.serverItems[data.id].itemId = data.id;
+      that.serverItems[data.id].itemType = data.itemType;
+      that.serverItems[data.id].selectable();
+      if(data.internalPortal){
+        that.serverItems[data.id].internalPortal = new InternalPortal(data.internalPortal.x, data.internalPortal.y, that.serverItems[data.id]);
+      }
+    });
   }
 }
 
 //player
 class Player extends Node {
-  constructor(){
-    super();
-    this.geometry = new THREE.CircleGeometry(20, 20);
-    /*this.material = new THREE.MeshPhongMaterial({
-      color: 0xff0000,
-      emissive: 0x2a0000,
-      shininess: 10,
-      specular: 0xffffff
-    });*/
-    this.material = new THREE.MeshBasicMaterial( { color: 0x4f3a1d } );
-    this.node = new THREE.Mesh(this.geometry, this.material);
+  constructor(username, scene){
+    super(0,0,scene);
     this.networkIdentity = new NetworkIdentity();
-    this.username = null;
-    this.speed = 3;
+    this.username = username;
+
+    this.mesh = new THREE.Mesh();
+    this.mesh.geometry = new THREE.CircleGeometry(10, 30);
+    this.mesh.material = new THREE.MeshBasicMaterial();
+
+    /*this.mesh = new THREE.Mesh();
+    this.mesh.geometry = new THREE.BoxGeometry(40, 40, 40);
+    this.mesh.material = new THREE.MeshPhongMaterial({
+      emissive: 0xffff00
+    });
+    this.position.z = 300;*/
+
+    this.add(this.mesh);
+
+    this.canvasText = new CanvasText(this.username, 30);
+    this.canvasText.position.y = 25;
+    this.add(this.canvasText);
+
+    this.direction = {x:0,y:0};
+    this.speed = {x:0, y:0};
+    this.maxSpeed = 1.5;
+    this.acc = 0.03;
+    this.target = null;
+
+    this.cachedPosition = {
+      x: this.position.x,
+      y: this.position.y
+    }
+    this.position.z = 3;
+
+    this.inventory = {
+      cupphones: 0,
+      records: []
+    }
+
+    this.tetheredTo = null;
   }
   destroy(){
-    playersScene.remove(this.node);
-    this.geometry.dispose();
-    this.material.dispose();
-    this.node = undefined;
     allNodes.remove(this);
+    this.remove(this.mesh);
+    this.parent.remove(this);
+    this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
+    this.mesh = undefined;
+    if(this.tetheredTo){
+      this.destroyTether();
+    }
+  }
+  changeText(text){
+    this.canvasText.changeText(text);
+  }
+  switchScene(sceneName){
+    this.parent.remove(this);
+    scenes[sceneName].add(this);
+  }
+  requestTether(receiverId){
+    if(this.inventory.cupphones>0 && !this.tetheredTo){
+      var that = this;
+      var options = [
+        {
+          text: 'yes',
+          function: function(){
+            socket.emit('requestTether', {requesterId: that.networkIdentity.id, receiverId: receiverId});
+          }
+        },
+        {
+          text: 'no',
+          function: function(){}
+        }
+      ]
+      optionsMenu.activate('Do you want to connect with this user?', options);
+    }
+  }
+  createTether(tetheredTo){
+    this.line = new THREE.Line();
+    this.line.geometry = new THREE.Geometry();
+    this.line.geometry.vertices.push(
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, 0),
+    )
+    this.line.material = new THREE.LineBasicMaterial({
+      color: this.mesh.material.color
+    });
+
+    this.add(this.line);
+
+    this.tetheredTo = tetheredTo;
+  }
+  destroyTether(){
+    this.remove(this.line);
+    this.line.geometry.dispose();
+    this.line.material.dispose();
+    this.line = undefined;
+    this.tetheredTo = null;
+  }
+  updateTether(){
+    this.line.geometry.vertices[1].x = this.tetheredTo.position.x - this.position.x;
+    this.line.geometry.vertices[1].y = this.tetheredTo.position.y - this.position.y;
+    this.line.geometry.verticesNeedUpdate = true;
   }
   movement(){
     if(keyState[68] || keyState[39]){
-      this.node.position.x += this.speed;
-    }
-    if(keyState[65] || keyState[37]){
-      this.node.position.x -= this.speed;
+      this.direction.x = 1;
+      this.target = null;
+    } else if (keyState[65] || keyState[37]){
+      this.direction.x = -1;
+      this.target = null;
+    } else if(!this.target){
+      this.direction.x = 0;
     }
     if(keyState[87] || keyState[38]){
-      this.node.position.y += this.speed;
+      this.direction.y = 1;
+      this.target = null;
+    } else if(keyState[83] || keyState[40]){
+      this.direction.y = -1;
+      this.target = null;
+    } else if(!this.target){
+      this.direction.y = 0;
     }
-    if(keyState[83] || keyState[40]){
-      this.node.position.y -= this.speed;
+    /*x movememnt */
+    if(this.direction.x!=0){
+      this.speed.x = lerp(this.speed.x, this.maxSpeed*this.direction.x, this.acc);
+    } else {
+      this.speed.x = lerp(this.speed.x, 0, this.acc);
+    }
+    this.position.x += this.speed.x;
+    /*y movement */
+    if(this.direction.y!=0){
+      this.speed.y = lerp(this.speed.y, this.maxSpeed*this.direction.y, this.acc);
+    } else {
+      this.speed.y = lerp(this.speed.y, 0, this.acc);
+    }
+    this.position.y += this.speed.y;
+    //moving by clicking the mouse
+    if(!this.target || drawingMode.active) return;
+    if(this.position.x>this.target.x+5){
+      this.direction.x = -1;
+    } else if(this.position.x<this.target.x-5){
+      this.direction.x = 1;
+    } else {
+      this.direction.x = 0;
+    }
+    if(this.position.y>this.target.y+5){
+      this.direction.y = -1;
+    } else if(this.position.y<this.target.y-5){
+      this.direction.y = 1;
+    } else {
+      this.direction.y = 0;
     }
   }
   updatePosition(){
-    if(keyState[68] || keyState[65] || keyState[87] || keyState[83]){
+    if(this.cachedPosition.x != this.position.x || this.cachedPosition.y != this.position.y){
       socket.emit('updatePosition', {
         id: this.networkIdentity.id,
-        x: this.node.position.x,
-        y: this.node.position.y
+        x: this.position.x,
+        y: this.position.y
       });
+      this.cachedPosition = {
+        x: this.position.x,
+        y: this.position.y,
+        z: 0
+      }
+
+      dom.coordinates.innerHTML = 'x:' + ingameCoors(this.position.x) + ' y:' + ingameCoors(this.position.y);
     }
   }
+  setPosFromCoors(x, y){
+    this.position.x = Math.round(x*100);
+    this.position.y = Math.round(y*100);
+  }
+  changeColor(hex){
+    var hex = hex;
+    hex = hex.substr(1)
+    hex = '0x' + hex;
+    this.mesh.material.color.setHex(hex);
+    if(this.line) this.line.material.color.setHex(hex);
+  }
   input(){
-    document.addEventListener('keyup', function(e){
-      var keyCode = e.keyCode;
-      if(keyCode==86){
-        mainCamera.switchView();
-      }
+    var that = this;
+    dom.clickableCanvasArea.addEventListener('click', function(e){
+      if(clickOrDrag==1) return;
+      that.target = canvasToWorldLoc(e.clientX, e.clientY);
     });
-    document.addEventListener('mouseup', function(e){
-      var drop = canvasToWorldLocOrth(e.clientX, e.clientY);
-    })
+  }
+  animation(){
+    if(this.direction.x!=0 && this.direction.y==0){
+      this.mesh.scale.y = lerp(this.mesh.scale.y, 0.2, 0.01);
+    } else {
+      this.mesh.scale.y = lerp(this.mesh.scale.y, 1, 0.1);
+    }
+
+    if(this.direction.y!=0 && this.direction.x==0){
+      this.mesh.scale.x = lerp(this.mesh.scale.x, 0.2, 0.01);
+    } else {
+      this.mesh.scale.x = lerp(this.mesh.scale.x, 1, 0.1);
+    }
+
+    if(this.direction.y!=0 && this.direction.x!=0){
+      this.mesh.scale.x = lerp(this.mesh.scale.x, 1, 0.1);
+      this.mesh.scale.y = lerp(this.mesh.scale.y, 1, 0.1);
+    }
   }
   update(){
-    if(!this.networkIdentity.controlling) return;
-    this.movement();
-    this.updatePosition();
+    this.animation();
+    if(this.networkIdentity.controlling){
+      this.movement();
+      this.updatePosition();
+      if(this.tetheredTo) this.updateTether();
+    }
   }
 }
 
 //camera
-class MainCamera extends Node {
+class CameraManager {
   constructor(){
-    super();
-    this.node = camera;
-    this.node.zoom = 0.3;
-    this.player = null;
-    this.view = 1;
-    this.switchViewDirection = 0;
-    this.switchView(0);
+    allNodes.push(this);
+    this.camera = camera;
+    this.target = null;
+    this.camera.position.x = 700;
+    this.camera.position.z = 2000;
+    this.zoomLevel = 900;
+    this.zoomFocusLevel = 400;
+    this.zoomMin = this.zoomFocusLevel;
+    this.zoomMax = 3000;
+
+    this.pivot = {
+      x: 0,
+      y: 0
+    }
+    this.targetRotation = {};
+    this.targetRotation.x = null;
+    this.view = '2d';
+
+    this.input();
+  }
+  input(){
+    var that = this;
+    document.addEventListener('keyup', function(e){
+      var keyCode = e.keyCode;
+      if(keyCode==86){
+        that.switchView();
+      }
+    });
+  }
+  switchView(){
+    if(this.view=='2d'){
+      this.targetRotation.x += 0.8;
+      this.pivot.y = this.targetRotation.x*-666.66;
+      this.view = '3d';
+    } else {
+      this.targetRotation.x = 0;
+      this.pivot.y = 0;
+      this.view = '2d';
+    }
   }
   update(){
-    if (this.player) {
-      this.node.position.x = lerp(this.node.position.x, this.player.node.position.x, 0.02);
-      this.node.position.y = lerp(this.node.position.y, this.player.node.position.y, 0.02);
+    if(typeof this.targetRotation.x == 'number'){
+      this.camera.rotation.x = lerp(this.camera.rotation.x, this.targetRotation.x, 0.03);
     }
-    this.node.zoom = lerp(this.node.zoom, this.limit, 0.02);
-    this.node.updateProjectionMatrix();
-  }
-  setTarget(player){
-    this.player = player;
-  }
-  switchView(view) {
-    if (typeof view == 'undefined'){
-      if(this.switchViewDirection==0){
-        this.view++;
-      } else {
-        this.view--;
-      }
-      if(this.view==2) this.switchViewDirection = 1;
-      if(this.view==0) this.switchViewDirection = 0;
-    } else {
-      this.view = view;
+    if(this.target){
+      this.camera.position.x = lerp(this.camera.position.x, this.target.position.x + this.pivot.x, 0.03);
+      this.camera.position.y = lerp(this.camera.position.y, this.target.position.y + this.pivot.y, 0.03);
     }
+    this.camera.position.z = lerp(this.camera.position.z, this.zoomLevel, 0.02);
+    this.camera.updateProjectionMatrix();
 
-    if(this.view == 0){
-      this.limit = 1;
-    } else if(this.view == 1){
-      this.limit = 0.7;
-    } else if(this.view == 2){
-      this.limit = 0.3;
+    //zooming in and out
+    if(keyState[187]){
+      this.adjustZoom('zoomin');
     }
-    console.log('camera view: ' + this.view);
+    if(keyState[189]){
+      this.adjustZoom('zoomout');
+    }
+  }
+  setTarget(target){
+    this.target = target;
+  }
+  adjustZoom(dir) {
+    if(dir=='zoomin'&& this.zoomLevel>this.zoomMin){
+      this.zoomLevel -= 10;
+    } else if(dir=='zoomout' && this.zoomLevel<this.zoomMax){
+      this.zoomLevel += 10;
+    }
+  }
+  focus(focusedItem){
+    if(this.focused) return;
+    this.zoomLevel = this.zoomFocusLevel;
+    this.focused = true;
+    this.focusedItem = focusedItem;
+  }
+  unfocus(){
+    this.zoomLevel = 900;
+    this.focused = false;
   }
 }
 
 //collision area
 class CollisionArea extends THREE.Sprite {
-  constructor(x, y, w, h){
-    super(new THREE.SpriteMaterial({ color: '#69f' }));
-    if(typeof w != undefined) this.scale.x = w;
-    if(typeof h != undefined) this.scale.y = h;
+  constructor(w, h){
+    super(new THREE.SpriteMaterial({ color: '#fff' }));
+    this.scale.x = w;
+    this.scale.y = h;
     allNodes.push(this);
-    scene.add(this);
     this.material.opacity = 0;
-    this.position.set(x, y, 1);
     this.inside = false;
+  }
+  destroy(){
+    this.material.dispose();
+    allNodes.remove(this);
   }
   collision(){
     if(!clientPlayer) return;
-    var col = collisionsDetection(clientPlayer.node, this);
+    var a = {
+      position: {
+        x: this.parent.position.x,
+        y: this.parent.position.y,
+      },
+      scale: {
+        x: this.scale.x,
+        y: this.scale.y
+      }
+    }
+    var col = collisionsDetection(clientPlayer, a);
     if(col){
       this.areaEntered();
     } else {
@@ -260,464 +763,612 @@ class CollisionArea extends THREE.Sprite {
 }
 
 //sprite
-class Sprite {
-  constructor(path, x, y, w, h){
+class Sprite extends THREE.Sprite {
+  constructor(path, w, maxWidth, adjustCollisionSize){
+    super();
+    allNodes.push(this);
     var that = this;
-    this.spriteMap = textureLoader.load(path, function(tex){
-      if(typeof w == 'undefined' && typeof h == 'undefined'){
-        that.sprite.scale.x = tex.image.width;
-        that.sprite.scale.y = tex.image.height;
-      }
-      if(typeof h == 'undefined'){
-        if(tex.image.width>w){
-          var ratio = tex.image.height/tex.image.width;
-          that.sprite.scale.x = w;
-          that.sprite.scale.y = w*ratio;
-        } else {
-          that.sprite.scale.x = tex.image.width;
-          that.sprite.scale.y = tex.image.height;
-        }
-      }
-      //tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      //tex.offset.set(1, 1);
-      //tex.repeat.set(5, 5);
+    this.targetScale = {x:0, y:0};
+    this.material = new THREE.SpriteMaterial({
+      transparent: true
     });
-    this.spriteMap.anisotropy = 0;
-    this.spriteMap.magFilter = THREE.NearestFilter;
-    this.spriteMap.minFilter = THREE.NearestFilter;
-    this.spriteMap.generateMipmaps = false;
-    this.spriteMaterial = new THREE.SpriteMaterial( { map: this.spriteMap, transparent: true } );
-    this.sprite = new THREE.Sprite(this.spriteMaterial);
-    this.sprite.position.x = x;
-    this.sprite.position.y = y;
-    if(typeof w != 'undefined' && typeof h != 'undefined'){
-      this.sprite.scale.x = w;
-      this.sprite.scale.y = h;
+    this.material.map = textureLoader.load(path, function(tex){
+      var ratio = tex.image.height/tex.image.width;
+      if(typeof w !== 'undefined'){
+        if(typeof maxWidth !== 'undefined' && tex.image.width>maxWidth){
+          w = maxWidth;
+        }
+        that.targetScale.x = w;
+        that.targetScale.y = w*ratio;
+        if(typeof adjustCollisionSize !== 'undefined'){
+          if(that.scale.x>=that.scale.y){
+            that.parent.collisionArea.scale.x = that.targetScale.x*1.5;
+            that.parent.collisionArea.scale.y = that.targetScale.x*1.5;
+          } else {
+            that.parent.collisionArea.scale.y = that.targetScale.y*1.5;
+            that.parent.collisionArea.scale.x = that.targetScale.y*1.5;
+          }
+        }
+      } else {
+        that.targetScale.x = tex.image.width;
+        that.targetScale.y = tex.image.height;
+      }
+    });
+    //this.material.map.anisotropy = 0;
+    //this.material.map.magFilter = THREE.NearestFilter;
+    //this.material.map.minFilter = THREE.NearestFilter;
+    //this.material.map.generateMipmaps = false;
+  }
+  animation(){
+
+  }
+  popupAnimation(){
+    var animationSpeed = 0.1;
+    if(this.targetScale){
+      this.scale.x = lerp(this.scale.x, this.targetScale.x, animationSpeed);
+      this.scale.y = lerp(this.scale.y, this.targetScale.y, animationSpeed);
     }
-    scene.add(this.sprite);
+  }
+  update(){
+    this.popupAnimation();
+    this.animation();
   }
   destroy(){
-    scene.remove(this.sprite);
-    this.spriteMaterial.dispose();
-    this.spriteMap.dispose();
-    this.sprite = undefined;
+    this.material.dispose();
+    this.material.map.dispose();
+    if(this.parent) this.parent.remove(this);
   }
 }
 
-//media
-class Media {
-  constructor(){
-    allNodes.push(this);
-    this.id = null;
-  }
-  draggable(arrayType, onclick){
-    var that = this;
-    var arrayType = arrayType;
-    if(typeof onclick != undefined) var onclick = onclick;
-    var mouse = new THREE.Vector2();
-    var held = false;
-    var intersects = [];
-    var pivotX=0, pivotY=0;
-    var clickOrDrag = 0; //0 for click, 1 for drag
-
-    window.addEventListener('mousedown', dragStart);
-    window.addEventListener('touchstart', dragStart);
-    window.addEventListener('mousemove', drag);
-    window.addEventListener('touchmove', drag);
-    window.addEventListener('mouseup', dragEnd);
-    window.addEventListener('touchend', dragEnd);
-
-    function dragStart(e){
-      clickOrDrag = 0;
-      var mouseX=0, mouseY=0;
-      if (e.type === "touchstart") {
-        mouseX = e.touches[0].clientX;
-        mouseY = e.touches[0].clientY;
-      } else {
-        mouseX = e.clientX;
-        mouseY = e.clientY;
-      }
-      mouse.x = ( mouseX / window.innerWidth ) * 2 - 1;
-      mouse.y = - ( mouseY / window.innerHeight ) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-      intersects = raycaster.intersectObjects( [that.sprite.sprite] );
-      if(intersects.length>0){
-        held = true;
-        var loc = canvasToWorldLocOrth(mouseX, mouseY);
-        var obj = intersects[0].object;
-        pivotX = loc.x-parseInt(obj.position.x);
-        pivotY = loc.y-parseInt(obj.position.y);
-      }
-    }
-    function drag(e){
-      if(held){
-        clickOrDrag = 1;
-        var mouseX=0, mouseY=0;
-        if (e.type === "touchstart") {
-          mouseX = e.touches[0].clientX;
-          mouseY = e.touches[0].clientY;
-        } else {
-          mouseX = e.clientX;
-          mouseY = e.clientY;
-        }
-        var loc = canvasToWorldLocOrth(mouseX, mouseY);
-        var obj = intersects[0].object;
-        obj.position.x = loc.x - pivotX;
-        obj.position.y = loc.y - pivotY;
-        socket.emit('updateMediaPosition', {
-          arrayType: arrayType,
-          id: that.id,
-          x: obj.position.x,
-          y: obj.position.y
-        });
-      }
-    }
-    function dragEnd(){
-      if(held){
-        held = false;
-        if(clickOrDrag==0 && onclick){ //click
-          onclick();
-        }
-      }
-    }
-  }
-  update(){
-
-  }
-}
-
-//image
-class Image extends Media {
-  constructor(path, x, y){
-    super();
-    var that = this;
-    this.highlighted = false;
-    this.sprite = new Sprite(path, x, y, 500);
-    this.collisionArea = new CollisionArea(x, y);
-    this.collisionArea.onEnter = function(){
-      console.log('image area entered');
-      that.highlighted = true;
-    }
-    this.collisionArea.onExit = function(){
-      console.log('image area exited');
-      that.highlighted = false;
-    }
-    this.draggable('images');
-  }
-  update(){
-    this.collisionArea.position.x = this.sprite.sprite.position.x;
-    this.collisionArea.position.y = this.sprite.sprite.position.y;
-    this.collisionArea.scale.x = this.sprite.sprite.scale.x*1.3;
-    this.collisionArea.scale.y = this.sprite.sprite.scale.y*1.3;
-    if (this.highlighted){
-      this.sprite.spriteMaterial.rotation = lerp(this.sprite.spriteMaterial.rotation, 0.2, 0.1);
-    } else {
-      this.sprite.spriteMaterial.rotation = lerp(this.sprite.spriteMaterial.rotation, 0, 0.1);
-    }
-  }
-}
-
-class Audio extends Media {
-  constructor(path, x, y){
-    super();
-    var that = this;
-    this.audio = new THREE.Audio(audioListener);
-    audioLoader.load(path, function(buffer){
-      that.audio.setBuffer(buffer);
-      that.audio.setLoop(true);
-    });
-    this.sprite = new Sprite('assets/imgs/audio.png', x, y, 150, 150);
-    this.collisionArea = new CollisionArea(x, y, 300, 300);
-    this.collisionArea.onEnter = function(){
-      console.log('audio area entered');
-      that.audio.play();
-    }
-    this.collisionArea.onExit = function(){
-      console.log('audio area exited');
-      that.audio.pause();
-    }
-    this.draggable('audios');
-  }
-  update(){
-    this.collisionArea.position.x = this.sprite.sprite.position.x;
-    this.collisionArea.position.y = this.sprite.sprite.position.y;
-    if (this.audio.isPlaying){
-      this.sprite.spriteMaterial.rotation += 0.01; //*dt;
-    }
-  }
-}
-
-class Hyperlink extends Media {
-  constructor(x, y){
-    super();
-    var that = this;
-    this.title = null;
-    this.url = null
-    this.highlighted = false;
-    this.sprite = new Sprite('assets/imgs/hyperlink.png', x, y, 150, 150);
-    this.collisionArea = new CollisionArea(x, y, 300, 300);
-    this.collisionArea.onEnter = function(){
-      console.log('hyperlink area entered');
-      that.highlighted = true;
-      dom.noticeText[1].innerHTML = 'Click on the hyperlink to go to the url';
-    }
-    this.collisionArea.onExit = function(){
-      console.log('hyprlink area exited');
-      that.highlighted = false;
-      dom.noticeText[1].innerHTML = '';
-    }
-    this.draggable('hyperlinks', function(){
-      window.open(that.url);
-    });
-  }
-  update(){
-    this.collisionArea.position.x = this.sprite.sprite.position.x;
-    this.collisionArea.position.y = this.sprite.sprite.position.y;
-    if (this.highlighted){
-      this.sprite.spriteMaterial.rotation = lerp(this.sprite.spriteMaterial.rotation, Math.PI*2, 0.05);
-    } else {
-      this.sprite.spriteMaterial.rotation = lerp(this.sprite.spriteMaterial.rotation, 0, 0.05);
-    }
-  }
-}
-
-class Room extends Media {
-  constructor(x, y){
-    super();
-    var that = this;
-    this.scene = new THREE.Scene();
-    this.roomName = null;
-    this.sprite = new Sprite('assets/imgs/room.png', x, y, 150, 150);
-    this.collisionArea = new CollisionArea(x, y, 300, 300);
-    this.inCollision = false;
-    this.insideRoom = false;
+//portal
+class InternalPortal {
+  constructor(x, y, parent){
+    this.x = x;
+    this.y = y;
+    this.parent = parent;
     this.input();
-    this.collisionArea.onEnter = function(){
-      console.log('room area entered');
-      that.inCollision = true;
-      dom.noticeText[1].innerHTML = 'click [E] to enter room: ' + that.roomName;
-    }
-    this.collisionArea.onExit = function(){
-      if(currentScene!=scene) return;
-      console.log('room area exited');
-      that.inCollision = false;
-      dom.noticeText[1].innerHTML = '';
-    }
-    this.draggable('rooms');
   }
   input(){
     var that = this;
     document.addEventListener('keyup', function(e){
-      if(!that.inCollision) return;
+      if(!that.parent.inCollision) return;
       var keyCode = e.keyCode;
       if(keyCode==69){
-        if(!that.insideRoom){
-          currentScene = that.scene;
-          dom.noticeText[1].innerHTML = 'click [E] to go back outside';
-          that.insideRoom = true;
-        } else {
-          currentScene = scene;
-          dom.noticeText[1].innerHTML = '';
-          that.insideRoom = false;
-        }
+        clientPlayer.setPosFromCoors(that.x, that.y);
+        centerTextControls.clear();
       }
     });
   }
 }
 
-class Tutorial {
-  constructor(){
-    this.movedLeft = false;
-    this.movedRight = false;
-    this.movedUp = false;
-    this.movedDown = false;
-    this.changedView = 0;
-    this.tutorialPhase = 'movement';
-    this.tutorialEvents = null;
-    this.input();
+//dom audio
+class domAudio extends Audio {
+  constructor(path, loop){
+    super(path);
+    if(loop) this.loop = true;
+    allNodes.push(this);
   }
-  switchTutorial(){
-    if(this.tutorialPhase=='movement' && this.movedLeft && this.movedRight && this.movedUp && this.movedDown){
-      this.tutorialPhase = 'changingView';
-    }
-    if(this.tutorialPhase=='changingView'){
-      if(this.changedView>3){
-        dom.noticeText[0].innerHTML = '';
-        document.removeEventListener('keyup', this.tutorialEvents);
-        return;
-      }
-      dom.noticeText[0].innerHTML = 'click [V] to change viewpoint';
+  update(){}
+  fadeOut(output){
+    this.update = function(){
+      if(this.volume>output) this.volume -= 0.01;
     }
   }
-  input(){
+  fadeIn(){
+    this.update = function(){
+      if(this.volume<1) this.volume += 0.01;
+    }
+  }
+}
+
+//text
+class CanvasText extends THREE.Mesh {
+  constructor(text, size){
+    super();
+    this.text = text;
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.size = size;
+    this.drawText(this.size);
+
+    this.geometry = new THREE.PlaneGeometry(40, 40);
+    this.material = new THREE.MeshBasicMaterial({
+      transparent: true,
+    });
+
+    const labelBaseScale = 0.01;
+    this.scale.x = this.canvas.width  * labelBaseScale;
+    this.scale.y = this.canvas.height * labelBaseScale;
+
+    this.material.map = new THREE.Texture(this.canvas);
+    this.material.map.needsUpdate = true;
+  }
+  update(){
+  }
+  drawText(size){
+    const borderSize = 2;
+    const font =  size + "px 'Press Start 2P'";
+    this.ctx.font = font;
+    // measure how long the name will be
+    const doubleBorderSize = borderSize * 2;
+    const width = this.ctx.measureText(this.text).width + doubleBorderSize;
+    const height = size + doubleBorderSize;
+    this.canvas.width = width;
+    this.canvas.height = height;
+
+    this.ctx.font = font;
+    this.ctx.textBaseline = 'top';
+    this.ctx.fillStyle = 'white';
+    this.ctx.fillText(this.text, borderSize, borderSize);
+  }
+  changeText(text){
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.text = text;
+    this.drawText(this.size);
+    this.material.map.needsUpdate = true;
+    const labelBaseScale = 0.01;
+    this.scale.x = this.canvas.width  * labelBaseScale;
+    this.scale.y = this.canvas.height * labelBaseScale;
+  }
+}
+
+//user items
+class Item extends Node {
+  constructor(x,y,scene){
+    super(x,y,scene);
+    this.itemId = null;
+    this.itemType = null;
+    this.position.z = 2;
+    this.scalable = false;
+    this.options = [];
+    this.optionsBucket = {};
+    this.fillOptionsBucket();
+  }
+  fillOptionsBucket(){
     var that = this;
-    this.tutorialEvents = function(e){
+    this.optionsBucket['addInternalPortal'] = {
+      text: 'Add Portal',
+      function: function(){
+        that.addInternalPortal();
+      }
+    }
+    this.optionsBucket['transform'] = {
+      text: 'Transform',
+      function: function(){
+        that.enableTransform();
+      }
+    }
+    this.optionsBucket['delete'] = {
+      text: 'Delete',
+      function: function(){
+        that.destroy();
+      }
+    }
+    this.optionsBucket['shareLoc'] = {
+      text: 'Share Location',
+      function: function(){
+        shareLocControls.shareLoc( ingameCoors(that.position.x), ingameCoors(that.position.y) );
+        centerTextControls.tempMessage(1, 'Location copied', 5000);
+      }
+    }
+  }
+  addInternalPortal(){
+    var that = this;
+    ingameForm.activate(function(){
+      var x = parseInt(ingameForm.dom.inputs[0].value);
+      var y = parseInt(ingameForm.dom.inputs[1].value);
+      console.log(x, y);
+      this.internalPortal = new InternalPortal(x, y, that);
+      socket.emit('addInternalPortal', {
+        itemType: that.itemType,
+        itemId: that.itemId,
+        x: x,
+        y: y
+      });
+    });
+  }
+  collide(w, h, onEnter, onExit){
+    var that = this;
+    this.inCollision = false;
+    this.collisionArea = new CollisionArea(w, h);
+    this.collisionArea.onEnter = function(){
+      console.log('collision area entered');
+      that.inCollision = true;
+      cameraManager.focus(that);
+      if(typeof onEnter != 'undefined') onEnter();
+    }
+    this.collisionArea.onExit = function(){
+      console.log('collision area exited');
+      that.inCollision = false;
+      cameraManager.unfocus();
+      if(typeof onExit != 'undefined') onExit();
+    }
+    this.add(this.collisionArea);
+  }
+  interact(key, onClick){
+    var that = this;
+    var onClick = onClick;
+    document.addEventListener('keyup', function(e){
+      if(!that.inCollision) return;
       var keyCode = e.keyCode;
-      switch(keyCode){
-        case 68:
-        case 39:
-          that.movedRight = true;
-          that.switchTutorial();
-          break;
-        case 65:
-        case 37:
-          that.movedLeft = true;
-          that.switchTutorial();
-          break;
-        case 87:
-        case 38:
-          that.movedUp = true;
-          that.switchTutorial();
-          break;
-        case 83:
-        case 40:
-          that.movedDown = true;
-          that.switchTutorial();
-          break;
-        case 86:
-          if(that.tutorialPhase=='changingView'){
-            that.changedView++;
-            that.switchTutorial();
-          }
-          break;
+      if(keyCode==key){
+        onClick();
+      }
+    });
+  }
+  selectable(){
+    selectableItems.push(this.sprite);
+  }
+  highlight(){
+    this.collisionArea.material.opacity = 0.2;
+  }
+  unhighlight(){
+    this.collisionArea.material.opacity = 0;
+  }
+  enableTransform(){
+    transformableItems.push(this.collisionArea);
+    this.collisionArea.material.opacity = 0.4;
+  }
+  disableTransform(){
+    var index = transformableItems.indexOf(this.collisionArea);
+    if (index > -1) {
+      transformableItems.splice(index, 1);
+    }
+    this.collisionArea.material.opacity = 0;
+  }
+  destroy(){
+    if(cameraManager.focusedItem && cameraManager.focusedItem.itemId == this.itemId){
+      cameraManager.unfocus();
+    }
+    allNodes.remove(this);
+    this.remove(this.sprite);
+    this.remove(this.collisionArea);
+    this.parent.remove(this);
+    this.sprite.destroy();
+    this.sprite = undefined;
+    this.collisionArea.destroy();
+    this.collisionArea = undefined;
+    if(this.audio) this.audio.pause();
+    if(this.itemType) socket.emit('removeItem', {itemId: this.itemId, itemType: this.itemType});
+  }
+}
+
+//image
+class BongoImage extends Item {
+  constructor(path, x, y, scene){
+    super(x, y, scene);
+    this.sprite = new Sprite(path, 0, 150, true);
+    this.scalable = true;
+    this.collide(0, 0);
+
+    this.options = [
+      this.optionsBucket['addInternalPortal'],
+      this.optionsBucket['transform'],
+      this.optionsBucket['delete'],
+      this.optionsBucket['shareLoc']
+    ]
+
+    this.add(this.sprite);
+  }
+}
+
+class BongoAudio extends Item {
+  constructor(path, x, y, scene){
+    super(x, y, scene);
+    var that = this;
+    this.path = path;
+    this.audio = new domAudio(this.path, true);
+    this.sprite = new Sprite('assets/imgs/audio_world.png', 25);
+
+    this.collide(200, 200, function(){
+      bgmusic.fadeOut(0.2);
+      that.audio.play();
+    }, function(){
+      bgmusic.fadeIn();
+      that.audio.pause();
+    });
+
+    this.optionsBucket['pickupRecord'] = {
+      text: 'take record',
+      function: function(){
+        that.pickupRecord();
       }
     }
-    document.addEventListener('keyup', this.tutorialEvents);
+    this.options = [
+      this.optionsBucket['addInternalPortal'],
+      this.optionsBucket['transform'],
+      this.optionsBucket['delete'],
+      this.optionsBucket['pickupRecord'],
+      this.optionsBucket['shareLoc']
+    ]
+
+    this.add(this.sprite);
+  }
+  pickupRecord(){
+    console.log('picked up record ' + this.path);
+    clientPlayer.inventory.records.push(new domAudio(this.path ,true));
+  }
+  calculateDistance(){
+    var distance = this.position.distanceTo(clientPlayer.position);
+    var mappedDistance = map(distance, this.collisionArea.scale.x/2, 0, 0, 1);
+    mappedDistance = Math.round(mappedDistance * 100)/100;
+    if(mappedDistance<0) mappedDistance=0;
+    if(mappedDistance>1) mappedDistance=1;
+    return mappedDistance;
+  }
+  update(){
+    if(!this.audio.paused){
+      this.audio.volume = this.calculateDistance();
+      this.sprite.material.rotation += 0.01; //*dt;
+    }
   }
 }
 
-//networkManager
-class NetworkManager {
-  constructor(){
-    this.clientId = null;
-    this.serverPlayers = {};
-    this.serverMedia = {};
-    this.imagesFolder = "downloadedAssets/imgs";
-    this.audioFolder = "downloadedAssets/audio";
-    this.socketEvents();
-  }
-  socketEvents(){
+class BongoRoom extends Item {
+  constructor(roomName, x, y, scene){
+    super(x, y, scene);
     var that = this;
-    socket.on("register", function(data) {
-      that.clientId = data.id;
-      console.log(data.id + " connected to server");
-    });
-    socket.on("spawn", function(data) {
-      console.log(data.id + " spawned in game with username: " + data.username);
-      that.serverPlayers[data.id] = new Player();
-      that.serverPlayers[data.id].node.position.set(data.x, data.y, 0);
-      that.serverPlayers[data.id].username = data.username;
-      that.serverPlayers[data.id].networkIdentity.setNetworkId(data.id, that.clientId);
+    this.roomName = roomName;
+    this.scene = new THREE.Scene();
+    this.scene.name = this.roomName;
+    scenes[this.roomName] = this.scene;
+    this.sprite = new Sprite('assets/imgs/room.png', 50);
+    this.insideRoom = false;
 
-      if(that.serverPlayers[data.id].networkIdentity.controlling){
-        mainCamera.setTarget(that.serverPlayers[data.id]);
-        that.serverPlayers[data.id].input();
-        clientPlayer = that.serverPlayers[data.id];
-        clientPlayerScene.add(that.serverPlayers[data.id].node);
+    this.collide(100, 100, function(){
+      centerTextControls.message(0, 'click [E] to enter room: ' + that.roomName)
+    }, function(){
+      if(currentScene!=scenes['mainScene']) return;
+      centerTextControls.clear(0);
+    });
+
+    this.interact(69, function(){
+      if(!that.insideRoom){
+        that.enterRoom();
       } else {
-        playersScene.add(that.serverPlayers[data.id].node);
+        that.exitRoom();
       }
     });
-    socket.on("disconnected", function(data) {
-      console.log(data.id + " disconnected from game");
-      that.serverPlayers[data.id].destroy();
-      delete that.serverPlayers[data.id];
+
+    this.options = [
+      this.optionsBucket['transform'],
+      this.optionsBucket['delete'],
+      this.optionsBucket['shareLoc']
+    ]
+
+    this.add(this.sprite);
+  }
+  enterRoom(){
+    currentScene = this.scene;
+    centerTextControls.message(0, 'click [E] to go back outside');
+    this.insideRoom = true;
+    cameraManager.unfocus();
+    this.updateServer();
+  }
+  exitRoom(){
+    currentScene = scenes['mainScene'];
+    clientPlayer.position.x = this.position.x;
+    clientPlayer.position.y = this.position.y;
+    centerTextControls.clear();
+    this.insideRoom = false;
+    this.updateServer();
+  }
+  updateServer(){
+    socket.emit('switchScene', {
+      id: clientPlayer.networkIdentity.id,
+      scene: currentScene.name
     });
-    socket.on("updatePosition", function(data) {
-      that.serverPlayers[data.id].node.position.x = data.x;
-      that.serverPlayers[data.id].node.position.y = data.y;
+  }
+}
+
+class BongoPortal extends Item {
+  constructor(x, y, portalX, portalY, scene){
+    super(x, y,scene);
+    var that = this;
+    this.portalX = portalX;
+    this.portalY = portalY;
+    this.sprite = new Sprite('assets/imgs/portal.png', 25);
+
+    this.collide(100, 100, function(){
+      var message = 'click [E] to teleport to x: ' + that.portalX + ', y: ' + that.portalY;
+      centerTextControls.message(0, message)
+    }, function(){
+      centerTextControls.clear(0);
     });
-    socket.on('updateActivePlayers', function(data){
-      dom.activeUsers.innerHTML = data;
+
+    this.interact(69, function(){
+      clientPlayer.setPosFromCoors(that.portalX, that.portalY);
+      centerTextControls.clear(0);
     });
-    socket.on('updateTime', function(data){
-      dom.clock.innerHTML = data;
-      //var a = parseInt(data[6]+data[7]);
-      ///var opacity = map(a,0,60,0,1);
-      //console.log(a, opacity);
-      //renderer.domElement.style.background = 'red';
-      //renderer.domElement.style.background = 'rgba(228, 208, 165, ' + 0 + ');';
+
+    this.options = [
+      this.optionsBucket['delete'],
+      this.optionsBucket['shareLoc']
+    ]
+
+    this.add(this.sprite);
+  }
+  update(){
+    if(this.inCollision){
+      this.sprite.material.rotation = lerp(this.sprite.material.rotation, Math.PI*2, 0.05);
+    } else {
+      this.sprite.material.rotation = lerp(this.sprite.material.rotation, 0, 0.05);
+    }
+  }
+}
+
+class BongoText extends Item {
+  constructor(text, x, y, size, scene){
+    super(x,y,scene);
+    var that = this;
+    this.text = new CanvasText(text, size);
+
+    this.collide(this.text.canvas.width*0.5, this.text.canvas.height);
+
+    this.options = [
+      this.optionsBucket['delete'],
+      this.optionsBucket['shareLoc'],
+      this.optionsBucket['transform']
+    ]
+
+    this.add(this.text);
+  }
+
+  selectable(){
+    selectableItems.push(this.text);
+  }
+
+  destroy(){
+    if(cameraManager.focusedItem.itemId == this.itemId) cameraManager.unfocus();
+    allNodes.remove(this);
+    this.remove(this.text);
+    this.remove(this.collisionArea);
+    this.parent.remove(this);
+    this.text.geometry.dispose();
+    this.text.material.dispose();
+    this.text = undefined;
+    this.collisionArea.destroy();
+    this.collisionArea = undefined;
+    socket.emit('removeItem', {itemId: this.itemId, itemType: this.itemType});
+  }
+}
+
+class BongoShape extends Item {
+  constructor(x,y,points,scene){
+    super(x,y,scene);
+
+    this.shape = new THREE.Shape();
+    this.shape.moveTo(0, 0);
+    for(var i=0; i<points.length; i++){
+      this.shape.lineTo(points[i].x, points[i].y);
+    }
+    this.shape.lineTo(0, 0);
+
+    this.mesh = new THREE.Mesh();
+    this.mesh.geometry = new THREE.ShapeGeometry(this.shape);
+    this.mesh.material = new THREE.MeshBasicMaterial();
+    this.mesh.material.color.setHex(0x00ff00);
+    this.add(this.mesh);
+  }
+}
+
+/* built-in items */
+
+class Cupphone extends Item {
+  constructor(x, y, scene){
+    super(x, y, scene);
+    var that = this;
+    this.sprite = new Sprite('assets/imgs/cupphone.png', 30);
+
+    this.collide(100, 100, function(){
+      centerTextControls.message(0, 'click [E] to collect apple');
+    }, function(){
+      centerTextControls.clear(0);
     });
-    //socket.on("sendMessage", function(data) {
-    //  var player = that.serverPlayers[data.id];
-    //  player.node.getComponent("PlayerManager").showMessage(data.message);
-    //});
-    socket.on("sendImage", function(data){
-      console.log(data.name + " img  instantiated");
-      var path = that.imagesFolder + '/' + data.name;
-      that.serverMedia[data.id] = new Image(path, data.x, data.y);
-      that.serverMedia[data.id].id = data.id;
+
+    this.interact(69, function(){
+      clientPlayer.inventory.cupphones++;
+      centerTextControls.clear(0);
+      console.log('You have ' + clientPlayer.inventory.cupphones + ' cupphone');
+      that.destroy();
     });
-    socket.on("sendAudio", function(data){
-      console.log(data.name + " audio  instantiated");
-      var path = that.audioFolder + '/' + data.name;
-      that.serverMedia[data.id] = new Audio(path, data.x, data.y);
-      that.serverMedia[data.id].id = data.id;
-    });
-    socket.on("sendHyperlink", function(data){
-      console.log(data.id + " hyperlink instantiated from url: " + data.url);
-      that.serverMedia[data.id] = new Hyperlink(data.x, data.y);
-      that.serverMedia[data.id].id = data.id;
-      that.serverMedia[data.id].title = data.title;
-      that.serverMedia[data.id].url = data.url;
-    });
-    socket.on("sendRoom", function(data){
-      console.log(data.id + " room instantiated with name: " + data.roomName);
-      that.serverMedia[data.id] = new Room(data.x, data.y);
-      that.serverMedia[data.id].id = data.id;
-      that.serverMedia[data.id].roomName = data.roomName;
-    });
-    socket.on("updateMediaPosition", function(data){
-      that.serverMedia[data.id].sprite.sprite.position.x = data.x;
-      that.serverMedia[data.id].sprite.sprite.position.y = data.y;
-    });
-    socket.on("clearMedia", function() {
-      console.log("clearing all media in client");
-      console.log(that.serverMedia);
-      for (var media in that.serverMedia) {
-        //that.serverMedia[media].sprite.destroy();
-      }
-      //that.serverMedia = {};
-    });
-    //socket.on('uploadProgress', function(){
-    //  console.log(data);
-    //});
+
+    this.add(this.sprite);
+  }
+}
+
+/* other */
+
+class DomIframe {
+  constructor(url, x, y){
+    allNodes.push(this);
+    this.itemId = null;
+    this.position = {
+      x: x,
+      y: y
+    }
+    this.iframe = document.createElement('iframe');
+    this.iframe.src = url;
+    dom.iframesContainer.append(this.iframe);
+  }
+  update(){
+    this.position.x = -cameraManager.camera.position.x;
+    this.position.y = -cameraManager.camera.position.y;
+    this.iframe.style.transform = 'translate(' + this.position.x + 'px,' + -this.position.y + 'px)';
+    this.iframe.style.webkitTransform = 'translate(' + this.position.x + 'px,' + -this.position.y + 'px)';
   }
 }
 
 
+class Box extends THREE.Mesh {
+  constructor(){
+    super();
+    this.geometry = new THREE.BoxGeometry(50,50,50);
+    this.material = new THREE.MeshBasicMaterial({color: 0x00ff00});
+    scenes['mainScene'].add(this);
+  }
+}
 
+class Marker extends Node {
+  constructor(x,y,size,scene){
+    super(x,y,scene);
+    this.mesh = new THREE.Mesh();
+    this.mesh.geometry = new THREE.CircleGeometry(size, size);
+    this.mesh.material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true
+    });
+    this.mesh.material.opacity = 0.5;
+    this.scale.x = 0;
+    this.scale.y = 0;
+    this.add(this.mesh);
+  }
+  destroy(){
+    allNodes.remove(this);
+    this.remove(this.mesh);
+    this.parent.remove(this);
+    this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
+    this.mesh = undefined;
+  }
+  popupAnimation(){
+    var animationSpeed = 0.1;
+    this.scale.x = lerp(this.scale.x, 1, animationSpeed);
+    this.scale.y = lerp(this.scale.y, 1, animationSpeed);
+  }
+  update(){
+    this.popupAnimation();
+  }
+}
+
+//new Box();
+//new Text('sent text');
 //BUILDING THE GAME
-
-var mainCamera = new MainCamera();
+var bgmusic = new domAudio('assets/soundfiles/bgmusic.wav', true);
+var cameraManager = new CameraManager();
 var networkManager = new NetworkManager();
-var tutorial = new Tutorial();
-var river = new Sprite('assets/imgs/river.png', 0, 0);
-var river2 = new Sprite('assets/imgs/river.png', 1427, 1245);
-var river3 = new Sprite('assets/imgs/river.png', 1427*2, 1245*2);
-var river4 = new Sprite('assets/imgs/river.png', -1427, -1245);
-var river5 = new Sprite('assets/imgs/river.png', -1427*2, -1245*2);
-scene.add(river.sprite);
+var river = new Sprite('assets/imgs/river.png');
+scenes['mainScene'].add(river);
+new Cupphone(820, -350, 'mainScene');
+var cloud = new Sprite('assets/imgs/cloud.png', 300);
+cloud.position.set(0, -70, 400);
+cloud.animation = function(){
+  this.position.x+=0.1;
+}
+var cloud2 = new Sprite('assets/imgs/cloud.png', 250);
+cloud2.position.set(400, 150, 400);
+scenes['mainScene'].add(cloud);
+scenes['mainScene'].add(cloud2);
 
+var library = new BongoRoom('library', 320, 0, 'mainScene');
+var tip = new Sprite('assets/imgs/tip.png', 300);
+library.scene.add(tip);
 
+var languageCenter = new BongoRoom('language center', 520, 100, 'mainScene');
 
-//RAYCASTING
-/*
-var raycaster = new THREE.Raycaster();
-var mouse = new THREE.Vector2();
-window.addEventListener('click', function(e){
-	mouse.x = ( e.clientX / window.innerWidth ) * 2 - 1;
-	mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-	// calculate objects intersecting the picking ray
-	var intersects = raycaster.intersectObjects( scene.children );
-	for (var i = 0; i<intersects.length; i++) {
-		//intersects[i].object.material.color.set(0xff0000);
-    //console.log(intersects[i].object.owner.owner);
-	}
-});
-*/
+var flight = new BongoAudio('assets/soundfiles/she_took_flight.wav', 200, 200, 'mainScene');
+flight.selectable();
+flight.options = [flight.optionsBucket['pickupRecord']];
 
 //RENDER LOOP
 function animate() {
@@ -725,27 +1376,27 @@ function animate() {
   for(var i=0; i<allNodes.length; i++){
     allNodes[i].update();
   }
-  renderer.clear();
+  renderer.render(scenes['playerScene'], camera);
   renderer.render(currentScene, camera);
-  renderer.clearDepth();
-  if(currentScene==scene){
-    renderer.render(playersScene, camera);
-    renderer.clearDepth();
-  }
-  renderer.render(clientPlayerScene, camera);
 }
 animate();
 
 
 /* HELPER FUNCTION */
 
+function ingameCoors(num){ //coordinates
+  var coor = num/100;
+  coor = Math.round(coor);
+  return coor;
+}
+
 function collisionsDetection(rect1, rect2){
   var collision = false;
   var playerRadius = 20;
-  if (parseInt(rect1.position.x)-playerRadius < parseInt(rect2.position.x) + rect2.scale.x/2 &&
-    parseInt(rect1.position.x + playerRadius) > parseInt(rect2.position.x)-rect2.scale.x/2 &&
-    parseInt(rect1.position.y)-playerRadius < parseInt(rect2.position.y) + rect2.scale.y/2 &&
-    parseInt(rect1.position.y + playerRadius) > parseInt(rect2.position.y)-rect2.scale.y/2) {
+  if (rect1.position.x-playerRadius < rect2.position.x+rect2.scale.x/2 &&
+    rect1.position.x+playerRadius > rect2.position.x-rect2.scale.x/2 &&
+    rect1.position.y-playerRadius < rect2.position.y+rect2.scale.y/2 &&
+    rect1.position.y+playerRadius > rect2.position.y-rect2.scale.y/2){
       collision = true;
   }
   return collision;
@@ -778,12 +1429,6 @@ function canvasToWorldLoc(x, y){
   var distance = - camera.position.z / vec.z;
   pos.copy( camera.position ).add( vec.multiplyScalar( distance ) );
   return pos;
-}
-function canvasToWorldLocOrth(x, y){
-  let vector = new THREE.Vector3();
-  vector.set((x / window.innerWidth) * 2 - 1, - (y / window.innerHeight) * 2 + 1, 0);
-  vector.unproject(camera);
-  return vector;
 }
 function lerp (start, end, amt){
   return (1-amt)*start+amt*end

@@ -1,0 +1,91 @@
+<div id="root">
+
+  <div v-for="background in backgrounds" class="backgrounds" v-bind:style="{ 'background': background }"></div>
+  <div id="clickableCanvasArea"></div>
+
+  <div id="lobbyInterface">
+    <p>Pick a color</p>
+    <div id="colorSelectLobby">
+      <div v-for="color in colors" v-bind:style="{ 'background': color }">{{color}}</div>
+    </div>
+    <form id="loginForm" autocomplete="off">
+      <input type="text" class="inputField" id="usernameInput" placeholder="Choose a username" maxlength="20">
+      <input type="number" class="inputField" id="spawnxInput" placeholder="00 N">
+      <input type="number" class="inputField" id="spawnyInput" placeholder="00 N">
+      <input type="submit" class="submit" value="Enter World">
+    </form>
+  </div>
+
+  <div id="ingameInterface">
+    <div id="header">
+      <p id="clock">00:00:00</p>
+      <p id="coordinates"></p>
+      <p id="activeUsers"><span>4</span><span> users</span></p>
+    </div>
+
+    <div id="footer">
+      <form id="chatForm" autocomplete="off">
+        <input type="text" class="inputField" id="chatInput" placeholder="send message here">
+      </form>
+
+      <div id="audioControls">
+        <img src="assets/imgs/audio_controls.png">
+      </div>
+
+      <div id="footerLeft">
+        <div id="tutorialButton">
+          <img src="assets/imgs/tutorial.png">
+        </div>
+        <div id="shareLocButton">
+          <img src="assets/imgs/shareLoc.png">
+        </div>
+      </div>
+    </div>
+
+    <div id="itemGrid" class="center">
+      <img class="item" v-for="item in items" v-bind:src="item.icon">
+    </div>
+
+    <div id="colorSelectIngame" class="center">
+      <div v-for="color in colors" v-bind:style="{ 'background': color }">{{color}}</div>
+    </div>
+
+    <div id="optionsMenu" class="center">
+      <p id="optionsTitle"></p>
+      <a></a>
+      <a></a>
+      <a></a>
+      <a></a>
+      <a></a>
+    </div>
+
+    <div id="centerText" class="center">
+      <p></p>
+      <p></p>
+    </div>
+
+    <div id="tutorialSceen">
+      <p>click [A, D, W, S] or [ARROW KEYS] to move</p>
+      <p>Press [+] and [-] to adjust zoom level</p>
+      <p>Press [V] to switch between 3d and 2d view</p>
+    </div>
+
+    <form id="ingameForm" class="center" autocomplete="off">
+      <input type="number" class="inputField">
+      <input type="number" class="inputField">
+      <input type="submit" class="submit">
+    </form>
+
+    <div id="iframesContainer"></div>
+
+    <div id="itemForms">
+      <form v-for="item in items" v-bind:id="item.form.id" class="center" autocomplete="off">
+        <div class="exitForm"></div>
+        <input v-for="field in item.form.fields" class="inputField" v-bind:class="[(field.isFile) ? 'siofu_input' : '']" v-bind:type="field.type" v-bind:name="field.name" v-bind:placeholder="field.placeholder" v-bind:value="field.defaultValue" :required="field.required">
+        <input type="submit" class="submit"  v-bind:class="[(item.form.hasFile) ? 'siofu_submit' : '']" value="upload">
+      </form>
+    </div>
+
+  </div>
+
+</div>
