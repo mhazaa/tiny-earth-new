@@ -19,7 +19,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.domElement.id = 'canvas';
 document.body.appendChild(renderer.domElement);
 //CAMERA
-var worldCamera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 2000);
+var worldCamera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 2500);
 var playerCamera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 2000);
 var cameras = [worldCamera, playerCamera]
 //RESIZING RENDERER WITHOUT SCALING FOR PERSPECTIVE CAMERA
@@ -117,6 +117,15 @@ var raycastEvents = function(){
     var itemsIntersected = raycaster.intersectObjects(selectableItems);
     var transformableItemsIntersected = raycaster.intersectObjects(transformableItems);
 
+    var continentsIntersected = raycaster.intersectObjects(continents);
+    if(continentsIntersected.length>0 && cameraManager.level==0){
+      var c = continentsIntersected[0].object; //selected continent
+      cameraManager.changeLevel(cameraManager.level+1);
+      cameraManager.target = c;
+    } else {
+      cameraManager.changeLevel(0);
+    }
+
     if(transformableItemsIntersected.length>0){
       held = true;
       clickLoc = canvasToWorldLoc(clientX, clientY);
@@ -162,7 +171,16 @@ var raycastEvents = function(){
   }
   function drag(e){
     clickOrDrag = 1;
-    if(held){
+    if(!held){
+      var hoveredContinent = raycaster.intersectObjects(continents);
+
+      if(hoveredContinent.length>0 && cameraManager.level==0){
+        var hc = hoveredContinent[0]; //selected continent
+        //hc.object.material.opacity = 0.5;
+        console.log(hc);
+      }
+
+    } else {
       var clientX = 0, clientY=0;
       if (e.type === "touchmove") {
         clientX = e.touches[0].clientX;
@@ -431,6 +449,7 @@ class Player extends Node {
     scenes[sceneName].add(this);
   }
   movement(){
+    if(cameraManager.level==0) return;
     if(keyState[68] || keyState[39]){
       this.direction.x = 1;
       this.target = null;
@@ -503,7 +522,7 @@ class Player extends Node {
   input(){
     var that = this;
     dom.clickableCanvasArea.addEventListener('click', function(e){
-      if(clickOrDrag==1) return;
+      if(clickOrDrag==1 || cameraManager.level==0) return;
       if(doubleClick){
         that.target = null;
       } else {
@@ -541,23 +560,18 @@ class CameraManager {
     this.worldCamera = worldCamera;
     this.playerCamera = playerCamera;
     this.target = null;
-    this.zoomMin = 600;
-    this.zoomMax = this.worldCamera.far-10;
-    this.zoomLevel = this.zoomMax;
-
-    this.worldCamera.position.z = this.zoomMax;
-    this.playerCamera.position.z = this.zoomMin;
+    this.zoomLevels = [1500, 600, 100];
+    this.level = 0;
+    this.zoom = this.zoomLevels[this.level];
 
     this.hammertime = new Hammer(window);
     this.hammertime.get('pinch').set({ enable: true });
 
-    this.pivot = {
-      x: 0,
-      y: 0
-    }
-    this.targetRotation = {};
-    this.targetRotation.x = null;
-    this.view = '2d';
+    this.targetRotation = {
+      x:0,
+      y:0
+    };
+
 
     this.input();
   }
@@ -565,61 +579,55 @@ class CameraManager {
     var that = this;
     document.addEventListener('keyup', function(e){
       var keyCode = e.keyCode;
-      if(keyCode==86){
-        //that.switchView();
+      if(keyCode==187 || keyCode==61){
+        //that.changeLevel(that.level+1);
+      }
+      if(keyCode==189 || keyCode==173){
+        //that.changeLevel(that.level-1);
       }
     });
 
     this.hammertime.on('pinchin', function(e){
-      that.adjustZoom('zoomout');
+      //that.changeLevel(that.leve+1);
     });
     this.hammertime.on('pinchout', function(e){
-      that.adjustZoom('zoomin');
+      //that.changeLevel(that.level-1);
     });
   }
   setTarget(target){
     this.target = target;
   }
-  adjustZoom(dir){
-    if(dir=='zoomin'&& this.zoomLevel>this.zoomMin){
-      this.zoomLevel -= 10;
-    } else if(dir=='zoomout' && this.zoomLevel<this.zoomMax){
-      this.zoomLevel += 10;
-    }
-  }
-  switchView(){
-    if(this.view=='2d'){
-      this.targetRotation.x += 0.8;
-      this.pivot.y = this.targetRotation.x*-666.66;
-      this.view = '3d';
-    } else {
+  changeLevel(level){
+    if(level<0 || level>2) return;
+    this.level = level;
+    if(this.level==0){
+      hudControls.changeLevel(this.level);
+      this.target = {};
+      this.target.position = {
+        x:0,
+        y:-800
+      }
+      this.targetRotation.x = 0.5;
+    } else if(this.level==1){
+      hudControls.changeLevel(this.level);
       this.targetRotation.x = 0;
-      this.pivot.y = 0;
-      this.view = '2d';
     }
+    this.zoom = this.zoomLevels[this.level];
   }
   update(){
     if(typeof this.targetRotation.x == 'number'){
       this.worldCamera.rotation.x = lerp(this.worldCamera.rotation.x, this.targetRotation.x, 0.03);
     }
     if(this.target){
-      this.worldCamera.position.x = lerp(this.worldCamera.position.x, this.target.position.x + this.pivot.x, 0.03);
-      this.worldCamera.position.y = lerp(this.worldCamera.position.y, this.target.position.y + this.pivot.y, 0.03);
+      this.worldCamera.position.x = lerp(this.worldCamera.position.x, this.target.position.x, 0.03);
+      this.worldCamera.position.y = lerp(this.worldCamera.position.y, this.target.position.y, 0.03);
 
       this.playerCamera.position.x = this.worldCamera.position.x;
       this.playerCamera.position.y = this.worldCamera.position.y;
 
-      this.worldCamera.position.z = lerp(this.worldCamera.position.z, this.zoomLevel, 0.02);
+      this.worldCamera.position.z = lerp(this.worldCamera.position.z, this.zoom, 0.02);
       this.worldCamera.updateProjectionMatrix();
       this.playerCamera.updateProjectionMatrix();
-    }
-
-    //zooming in and out
-    if(keyState[187] || keyState[61]){
-      this.adjustZoom('zoomin');
-    }
-    if(keyState[189] || keyState[173]){
-      this.adjustZoom('zoomout');
     }
   }
 }
@@ -1065,7 +1073,7 @@ class BongoRoom extends Item {
     this.scene = new THREE.Scene();
     this.scene.name = this.roomName;
     scenes[this.roomName] = this.scene;
-    this.sprite = new Sprite('imgs/ui/room.png', 65);
+    this.sprite = new Sprite('imgs/ui/room.png', 30);
     this.insideRoom = false;
 
     this.collide(100, 100, function(){
@@ -1438,28 +1446,34 @@ var greenland = new Sprite('imgs/continents/greenland.png', 0.6, -300, 600, 'mai
 var northAmerica = new Sprite('imgs/continents/north_america.png', 0.6, -900, 100, 'mainScene');
 var southAmerica = new Sprite('imgs/continents/south_america.png', 0.6, -450, -620, 'mainScene');
 var asiaEurope = new Sprite('imgs/continents/asia_europe.png', 0.6, 700, 180, 'mainScene');
+asiaEurope.position.z = -10;
+greenland.position.z = -10;
+southAmerica.position.z = -10;
 var africa = new Sprite('imgs/continents/africa.png', 0.6, 270, -400, 'mainScene');
 
-var radioTower = new Sprite('imgs/objects/radio_tower.png', 200, 750, 500, 'mainScene');
-var pyramid = new Sprite('imgs/objects/pyramid.png', 100, 320, -150, 'mainScene');
-var cactus = new Sprite('imgs/objects/cactus.png', 70, -800, 0, 'mainScene');
+var continents = [greenland, northAmerica, southAmerica, asiaEurope, africa];
+
+//var radioTower = new Sprite('imgs/objects/radio_tower.png', 200, 750, 500, 'mainScene');
+/*var pyramid = new Sprite('imgs/objects/pyramid.png', 100, 320, -150, 'mainScene');
+var cactus = new Sprite('imgs/objects/cactus.png', 70, -800, 0, 'mainScene');*/
 
 var library = new BongoRoom('library', 400, 70, 'mainScene');
 var tip = new Sprite('imgs/tip.png', 300, 0, 0, 'library');
 
 var languageCenter = new BongoRoom('language center', 600, 150, 'mainScene');
 
-
+/*
 var cloud = new Sprite('imgs/cloud.png', 300, 0, -70, 'mainScene');
 cloud.position.z = 1400;
 var cloud2 = new Sprite('imgs/cloud.png', 300, 150, 100,  'mainScene');
 cloud2.position.z = 1500;
 var cloud3 = new Sprite('imgs/cloud.png', 300, -400, 60,  'mainScene');
 cloud3.position.z = 1400;
+*/
 
-var house = new House(-300, 500, 'mainScene');
-house.rotation.z = 0.8;
-var radio = new RadioAudio('http://www.partyviberadio.com:8000/;listen.pls?sid=1', 740, 760, 'mainScene');
+//var house = new House(-300, 500, 'mainScene');
+//house.rotation.z = 0.8;
+//var radio = new RadioAudio('http://www.partyviberadio.com:8000/;listen.pls?sid=1', 740, 760, 'mainScene');
 
 //var flight = new BongoAudio('soundfiles/she_took_flight.wav', 200, 200, 'mainScene', true);
 //flight.selectable();

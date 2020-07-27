@@ -82,6 +82,28 @@ form .submit:hover, form .button:hover {
   cursor: pointer;
 }
 
+/*main text */
+#mainText {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  -webkit-transform: translateX(-50%);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  -webkit-transition: opacity 0.2s;
+}
+#mainText p {
+  display: inline-block;
+  white-space: no-wrap;
+  color: white;
+  background: black;
+  padding: 20px 40px;
+  font-size: 2em;
+  text-transform: uppercase;
+}
+
 /*lobby interface */
 
 #lobbyInterface {
@@ -299,8 +321,12 @@ svg .color {
 /*ingame styling*/
 
 #ingameInterface {
-  display: none;
+  display: block;
   z-index: 99;
+
+  opacity: 0;
+  transition: opacity 0.2s;
+  -webkit-transition: opacity 0.2s;
 }
 
 /* header */

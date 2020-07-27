@@ -109,12 +109,30 @@ class ColorSelector {
   }
 }
 
+class HudControls {
+  constructor(){
+    this.dom = {
+      mainText: document.querySelector('#mainText'),
+      ingameInterface: document.querySelector('#ingameInterface')
+    }
+  }
+  changeLevel(level){
+    if(level==0){
+      this.dom.ingameInterface.style.opacity = 0;
+      this.dom.mainText.style.opacity = 1;
+    } else if(level==1){
+      this.dom.ingameInterface.style.opacity = 1;
+      this.dom.mainText.style.opacity = 0;
+    }
+  }
+}
+var hudControls = new HudControls();
+
 class LobbyInterface {
   constructor(){
     var urlParams = new URLSearchParams(window.location.search);
     this.dom = {
       lobbyInterface: document.getElementById('lobbyInterface'),
-      ingameInterface: document.getElementById('ingameInterface'),
 
       intro: document.getElementById('intro'),
       exploreWorld: document.getElementById('exploreWorld'),
@@ -156,6 +174,8 @@ class LobbyInterface {
         color: null
       }
     }
+
+    this.spawn();
 
     this.input();
   }
@@ -258,7 +278,7 @@ class LobbyInterface {
     }
     socket.emit('spawn', obj);
     this.dom.lobbyInterface.style.display = 'none';
-    this.dom.ingameInterface.style.display = 'block';
+    hudControls.changeLevel(0);
   }
 }
 var lobbyInterface = new LobbyInterface();
