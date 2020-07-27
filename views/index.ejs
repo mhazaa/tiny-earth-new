@@ -3,73 +3,36 @@
 <head>
   <meta charset=utf-8>
   <meta name="viewport" content="width=device-width, initial-scale=0.8, user-scalable=no">
-  <title>Flat</title>
-  <link rel="stylesheet" type="text/css" href="assets/styles/reset.css">
-  <link rel="stylesheet" type="text/css" href="assets/styles/style.css">
+  <title>Tiny Earth</title>
+
+  <script src='https://api.mapbox.com/mapbox-gl-js/v1.3.2/mapbox-gl.js'></script>
+  <link href='https://api.mapbox.com/mapbox-gl-js/v1.3.2/mapbox-gl.css' rel='stylesheet'/>
+
+  <link rel="stylesheet" type="text/css" href="styles/reset.css">
+  <link rel="stylesheet" type="text/css" href="styles/style.css">
 </head>
 <body>
 
 <% include body %>
 
 <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
-<script src="pageData.js"></script>
+<script src="globalData.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.slim.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/socketio-file-upload@0.7.0/client.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/106/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@0.3.20/dist/peer.min.js"></script>
+<script src="https://hammerjs.github.io/dist/hammer.min.js"></script>
+<script src="scripts/helperFunctions.js"></script>
+<script src="scripts/networking.js"></script>
+<script src="scripts/interface.js"></script>
+
+<p id="branch" style="display:none"><%= branch %></p>
 <script>
-
-var socket = io();
-
-var uploader = new SocketIOFileUpload(socket);
-var siofu_submits = document.getElementsByClassName('siofu_submit');
-var siofu_inputs = document.getElementsByClassName('siofu_input');
-for(var i=0; i<siofu_submits.length; i++){
-  uploader.listenOnSubmit(siofu_submits[i], siofu_inputs[i]);
-}
-
-//let pc1 = new RTCPeerConnection();
-var peer = new Peer();
-var peerId;
-
-peer.on('open', function(id){
-  peerId = id;
-  socket.emit('open', {peerId: peerId});
-});
-
-//var micStream = new Audio();
-
-//peer.on('stream', function(stream){
-  //console.log(stream);
-  //micStream.srcObject = stream;
-  //micStream.play();
-//});
-
-/*
-window.AudioContext = window.AudioContext || window.webkitAudioContext;
-
-window.addEventListener('click', function(){
-  navigator.mediaDevices.getUserMedia({audio: true})
-  .then(function(stream){
-    var stream = stream;
-
-    var audioContext = new window.AudioContext()
-    var mediaStreamSource = audioContext.createMediaStreamSource(stream)
-    var mediaStreamDestination = audioContext.createMediaStreamDestination()
-    mediaStreamSource.connect(mediaStreamDestination);
-
-    micStream.srcObject = mediaStreamSource;
-    micStream.play();
-  })
-  .catch(function(err){
-    console.error(e)
-  });
-});*/
-
-
+  var branch = document.getElementById('branch').innerHTML;
+  var script = document.createElement('script');
+  script.src = 'scripts/gameDev_' + branch + '.js';
+  document.head.appendChild(script);
 </script>
-<script src="assets/scripts/interface.js"></script>
-<script src="assets/scripts/gameDev.js"></script>
 
 </body>
 </html>

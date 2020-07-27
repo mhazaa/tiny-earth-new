@@ -7,7 +7,7 @@ module.exports = function Player(){
   this.username = '';
   this.x = 0;
   this.y = 0;
-  this.color = '0xffffff';
+  this.avatarOpts = {};
   this.scene = 'mainScene';
   this.text = '';
 }

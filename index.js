@@ -2,26 +2,110 @@ var express = require('express');
 var app = express();
 var fs = require('fs');
 var request = require('request');
+var formidable = require('formidable');
 var path = require('path');
-var PORT = process.env.PORT || 52300;
-var server = app.listen(PORT, '0.0.0.0', function(){
-	console.log('listenting to port: ' + PORT);
+var socket = require('socket.io');
+
+//seting up ssl
+var http = require('http');
+var https = require('https');
+var httpsPort = 443;
+var httpPort = 80;
+
+var options = {
+	cert: fs.readFileSync('./certs/tinyearth_io.crt'),
+	ca: fs.readFileSync('./certs/tinyearth_io.ca-bundle'),
+	key: fs.readFileSync('./certs/tinyearth.key'),
+	requestCert: false,
+	rejectUnauthorized: false
+}
+
+var httpsServer = https.createServer(options, app);
+httpsServer.listen(httpsPort, function(){
+	console.log('listenting to port: ' + httpsPort);
 });
 
-var socket = require('socket.io');
-var siofu = require("socketio-file-upload");
-var io = socket(server);
+var httpServer = app.listen(httpPort, '0.0.0.0', function(){
+	console.log('listenting to port: ' + httpPort);
+});
+
+var io = socket(httpsServer);
 
 app.set('view engine', 'ejs');
-app.use(express.static('views'));
-app.use(siofu.router)
+app.use(express.static('assets'));
 
-var mainRouter = require("./routes/router.js");
-mainRouter(app);
+app.use(function (req, res, next){
+	if (req.secure){
+		next();
+  } else {
+		res.redirect('https://' + req.headers.host + req.url);
+  }
+});
+
+app.get('', function(req, res){
+	res.render('./index', {
+		branch: 'main'
+	});
+});
+app.get('/disneyland', function(req, res){
+	res.render('./index', {
+		branch: 'disneyland'
+	});
+});
+app.get('/home', function(req, res){
+	res.redirect('/');
+});
+app.post('/sendItem', function(req, res){
+	var form = new formidable.IncomingForm();
+	form.uploadDir = downloadedAssets;
+
+	form.parse(req, function(err, fields, files){
+		var type = itemsData[fields.itemType];
+		var item = new type.Class();
+		type.array[item.id] = item;
+		for(var key in fields){
+			if(key == 'x' || key == 'y'){
+				item[key] = parseInt(fields[key]);
+			} else {
+				item[key] = fields[key];
+			}
+		}
+
+		var extension = path.extname(files.localFile.name);
+		if(extension.length==0) extension = '.ogg';
+		item.name = item.id + extension;
+
+		fs.rename(files.localFile.path, downloadedAssets + '/' + item.name, function(err){
+			if(err) console.log(err);
+			console.log('local file uploaded to server');
+			console.log(item.id + ' added to ' + item.itemType + 's');
+			console.log(item);
+			io.sockets.emit('sendItem', item);
+			res.end();
+		});
+	});
+});
+
+/* database steup*/
+/*
+var MongoClient = require('mongodb').MongoClient;
+var assert = require('assert');
+var url ="mongodb+srv://mhazaa:<*Lesmondes2012*>@tinyearthcluster-mceq5.gcp.mongodb.net/test?retryWrites=true&w=majority";
+var client = new MongoClient(url);
+
+client.connect(function(err){
+	assert.equal(null, err);
+	console.log("Connected successfully to server");
+	var db = client.db('tinyearthtest');
+	var collection = db.collection('coll');
+  client.close();
+});
+*/
+
 
 var Player = require("./classes/Player");
 var Items = require("./classes/Items");
-var Timer = require("./classes/Timer")
+var Timer = require("./classes/Timer");
 
 var timer = new Timer();
 timer.start();
@@ -55,7 +139,7 @@ var itemsData = {
 
 var players = [];
 var sockets = [];
-var downloadedAssets = 'views/downloadedAssets';
+var downloadedAssets = 'assets/downloadedAssets';
 
 io.on('connect', function(socket){
 	setInterval(function(){
@@ -75,20 +159,19 @@ io.on('connect', function(socket){
 		player.peerId = data.peerId;
 	});
 
+	for(var playerID in players){
+		socket.emit('spawn', players[playerID]);
+	}
+
 	socket.on('spawn', function(data){
+		console.log(player.id + ' spawned into game with username ' + player.username);
 		player.username = data.username;
-		player.color = data.color;
+		player.avatarOpts = data.avatarOpts;
 		if(data.x) player.x = data.x;
 		if(data.y) player.y = data.y;
-		console.log(player.id + ' spawned into game with username ' + player.username);
 		players[thisPlayerID] = player;
 		socket.emit('spawn', player);
-		socket.broadcast.emit('spawnOtherPlayers', player);
-		for(var playerID in players){
-			if (playerID != thisPlayerID) {
-				socket.emit('spawnOtherPlayers', players[playerID]);
-			}
-		}
+		socket.broadcast.emit('spawn', player);
 		io.sockets.emit('updateActivePlayers', Object.size(players));
 		ingameEvents();
 	});
@@ -113,25 +196,6 @@ io.on('connect', function(socket){
 			});
 		});
 
-		socket.on('updateColor', function(data){
-			console.log(thisPlayerID + ' changed color to ' + data.color);
-			player.color = data.color;
-			socket.broadcast.emit('updateColor', {
-				id: thisPlayerID,
-				color: player.color
-			});
-		});
-
-		socket.on('requestTether', function(data){
-			console.log(data.requesterId + ' is requesting tether with ' + data.receiverId);
-			io.to(players[data.receiverId].socketId).emit('requestTether', {requesterId: data.requesterId});
-		});
-
-		socket.on('acceptTether', function(data){
-			console.log(data.receiverId + ' is accepting tether with ' + data.requesterId);
-			io.to(players[data.requesterId].socketId).emit('acceptTether', {receiverId: data.receiverId});
-		});
-
 		socket.on('sendText', function(data){
 			console.log(player.username + ': ' + data.text);
 			player.text = data.text;
@@ -151,39 +215,28 @@ io.on('connect', function(socket){
 		});
 
 		/*sending items */
-		var uploader = new siofu();
-		uploader.dir = downloadedAssets;
-		uploader.listen(socket);
-		var fileUploading;
-		uploader.on('complete', function(e){
-			fileUploading.name = e.file.name;
-			console.log(fileUploading.localFile + ' local file uploaded to server');
-			console.log(fileUploading.id + ' added to ' + fileUploading.itemType + 's');
-			console.log(fileUploading);
-			io.sockets.emit('sendItem', fileUploading);
-		});
-
 		socket.on('sendItem', function(data){
-			var itemData = itemsData[data.itemType];
-			var item = new itemData.Class();
+			var type = itemsData[data.itemType];
+			var item = new type.Class();
 
-			itemData.array[item.id] = item;
+			type.array[item.id] = item;
 			for(var key in data){
-				itemData.array[item.id][key] = data[key]
+				type.array[item.id][key] = data[key]
 			}
 
 			if(data.remoteFile){
-				itemData.array[item.id].name = itemData.array[item.id].id + path.extname(data.remoteFile);
 				/*downloading remote file*/
+				type.array[item.id].name = type.array[item.id].id + path.extname(data.remoteFile);
+
 				var file = fs.createWriteStream(downloadedAssets + "/" + item.name);
 				request.get(data.remoteFile, function(err, resp, body){
 					if(err){
 						console.log(err.message, ' file deleted');
 						file.close();
 						fs.unlinkSync(downloadedAssets + "/" + item.name);
-						delete itemData.array[item.id];
+						delete type.array[item.id];
 					} else {
-						file.on('finish', function() {
+						file.on('finish', function(){
 							file.close(function(){
 								console.log(data.remoteFile + ' remote file uploaded to server');
 								console.log(item.id + ' added to ' + item.itemType + 's');
@@ -197,14 +250,9 @@ io.on('connect', function(socket){
 				return;
 			}
 
-			if(data.localFile){
-				fileUploading = itemData.array[item.id];
-				return;
-			}
-
 			console.log(item.id + ' added to ' + item.itemType + 's');
 			console.log(item);
-			io.sockets.emit('sendItem', itemData.array[item.id]);
+			io.sockets.emit('sendItem', type.array[item.id]);
 		});
 
 		/* sends all the pre-existings item elements to client */
@@ -231,6 +279,11 @@ io.on('connect', function(socket){
 		socket.on('removeItem', function(data){
 			console.log(data.itemId + ' removed from ' + data.itemType + 's');
 			var array = itemsData[data.itemType].array;
+
+			if(array[data.itemId].itemType == 'image' || array[data.itemId].itemType == 'audio'){
+				fs.unlinkSync(downloadedAssets + '/' + array[data.itemId].name);
+			}
+
 			delete array[data.itemId];
 			socket.broadcast.emit('removeItem', {itemId: data.itemId});
 		});
@@ -250,9 +303,9 @@ io.on('connect', function(socket){
 
 
 Object.size = function(obj) {
-    var size = 0, key;
-    for (key in obj) {
-        if (obj.hasOwnProperty(key)) size++;
-    }
-    return size;
+	var size = 0, key;
+  for (key in obj) {
+		if (obj.hasOwnProperty(key)) size++;
+  }
+  return size;
 }

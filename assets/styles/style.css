@@ -1,0 +1,595 @@
+@import url('https://fonts.googleapis.com/css?family=IBM+Plex+Mono:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i&display=swap');
+
+* {
+  user-drag: none;
+  user-select: none;
+  -moz-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+}
+
+p, input, a {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+}
+
+body {
+  overflow: hidden;
+  font-size: 18px;
+  background: #524539;
+}
+
+#map, #clickableCanvasArea {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+#map {
+  z-index: -999;
+}
+#clickableCanvasArea {
+  z-index: 0;
+  cursor: pointer;
+}
+
+/* all forms */
+
+form {
+  width: 300px;
+  margin: auto;
+  position: relative;
+  display: none;
+}
+form input {
+  outline: none;
+  border: none;
+  width: 100%;
+  height: 50px;
+  display: inline-block;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  margin: 0;
+  padding: 0;
+  margin-top: 10px;
+  text-align: center;
+  font-size: 1em;
+}
+form .submit, form .button {
+  background: black;
+  color: white;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+form .button {
+  background: red;
+}
+form .submit:hover, form .button:hover {
+  opacity: 0.6;
+}
+
+#itemForms form .exitForm {
+  position: relative;
+  display: block;
+  float: right;
+  background: url('../imgs/ui/exit.png');
+  background-size: cover;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+/*lobby interface */
+
+#lobbyInterface {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+/*intro*/
+.blackbutton {
+  background: black;
+  color: white;
+  padding: 20px 40px;
+  cursor: pointer;
+  font-size: 1em;
+}
+.blackbutton:hover {
+  opacity: 0.6;
+}
+#lobbyInterface #intro {
+  display: block;
+  position: absolute;
+  width: 100%;
+  bottom: 0;
+}
+#intro a {
+  color: white;
+  padding: 20px 40px;
+  display: table;
+  margin: auto;
+}
+/*login*/
+#lobbyInterface #login {
+  display: none;
+  background: rgba(0,0,0,0.7);
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+#login #done {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 1;
+}
+#login #characterSelection {
+  position: absolute;
+  width: 350px;
+  left: 50%;
+  bottom: 50%;
+  transform: translate(-50%, 50%);
+  -webkit-transform: translate(-50%, 50%);
+}
+#characterSelection #character {
+  display: block;
+  position: relative;
+  width: 30%;
+  left: 35%;
+  margin-bottom: 40%;
+}
+#character #face {
+  position: relative;
+  width: 100%;
+}
+#character #face .fill {
+  fill: white;
+}
+#character #hair, #character #shoes {
+  display: block;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+#shoes div {
+  display: none;
+  position: absolute;
+  width: 70%;
+  top: 95%;
+  left: 18%;
+}
+#shoes div svg {
+  position: absolute;
+  width: 100%;
+}
+#shoes div .left {
+  left: 0;
+  top: 10px;
+  transform-origin: top;
+  -webkit-transform-orign: top;
+  transform: rotate(30deg);
+  -webkit-transform: rotate(30deg);
+}
+#shoes div .right {
+  left: 40%;
+}
+#hair svg {
+  display: none;
+  position: absolute;
+  width: 115%;
+  top: -20%;
+  left: -15%;
+}
+#hair svg:nth-of-type(2) {
+  top: -25% !important;
+  left: -13% !important;
+}
+#hair svg:nth-of-type(3) {
+  width: 135% !important;
+  top: -25% !important;
+  left: -35% !important;
+}
+svg .white {
+  fill: white;
+}
+svg .color {
+  fill: #cfcfcf;
+}
+/* selection box */
+#characterSelection #selectionBox {
+  background: #837a71;
+  position: relative;
+  width: 100%;
+  padding: 20px 0;
+  text-align: center;
+  border-radius: 8px;
+}
+#selectionBox #selectionBar {
+  display: inline-block;
+}
+#selectionBar a {
+  display: inline-block;
+  color: white;
+  padding: 5px 20px;
+  border-radius: 100px;
+  cursor: pointer;
+}
+#selectionBar .selected {
+  background: rgba(0,0,0,0.3);
+}
+#selectionBox .tab {
+  display: none;
+  position: relative;
+  height: 60px;
+  width: 100%;
+  margin: 30px 0;
+}
+.tab img {
+  height: 100%;
+  margin-right: 20px;
+  display: inline-block;
+  cursor: pointer;
+}
+.tab img:last-of-type {
+  margin-right: 0 !important;
+}
+.tab input {
+  display: block;
+  float: left;
+  margin: 0;
+  padding: 0;
+  border: 3px solid black;
+  outline: none;
+  height: 30px;
+  text-align: center;
+}
+.tab input:nth-of-type(1){
+  margin-left: 10%;
+  width: 20%;
+  border-radius: 10px 0 0 10px;
+}
+.tab input:nth-of-type(2){
+  width: 60%;
+  border-radius: 0 10px 10px 0;
+}
+.selectedOption {
+  background: rgba(0,0,0,0.3);
+  outline: 2px white solid;
+}
+#selectionBox #colorSelector {
+  display: inline-block;
+  position: relative;
+  margin: auto;
+  width: 280px;
+  height: 15px;
+  opacity: 1;
+}
+#colorSelector .button {
+  background: white;
+  opacity: 0.7;
+  position: absolute;
+  left: 0%;
+  top: -2.5px;
+  width: 20px;
+  height: 20px;
+  z-index: 1;
+  border-radius: 200px;
+  cursor: pointer;
+  border: 3px solid black;
+}
+#colorSelector .bar {
+  background: white;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50px;
+  border: 3px solid black;
+}
+
+/*ingame styling*/
+
+#ingameInterface {
+  display: none;
+  z-index: 99;
+}
+
+/* header */
+
+#header {
+  position: absolute;
+  width: 100%;
+  top: 0;
+  left: 0;
+  display: block;
+  height: 30px;
+}
+#header div {
+  position: absolute;
+  display: inline-block;
+  height: 100%;
+  background: black;
+  padding: 0 20px;
+  margin: 5px;
+  line-height: 30px;
+  border-radius: 100px;
+}
+#header div:nth-of-type(1) {
+  left: 0;
+}
+#header div:nth-of-type(2) {
+  cursor: pointer;
+  left: 50%;
+  transform: translateX(-50%);
+  -webkit-transform: translateX(-50%);
+}
+#header div:nth-of-type(3) {
+  right: 0;
+}
+#header div p {
+  display: block;
+  float: left;
+  font-size: 0.7em;
+  color: white;
+  text-transform: uppercase;
+}
+#header div img {
+  display: inline-block;
+  position: relative;
+  height: 100%;
+  width: auto;
+}
+
+/* footer */
+#footer {
+  width: 100%;
+  position: absolute;
+  bottom: 0;
+  text-align: center;
+}
+#footer #itemGrid {
+  display: none;
+  padding: 20px 20px;
+  background: rgba(0,0,0,0.3);
+}
+#itemGrid img {
+  display: block;
+  float: left;
+  height: 30px;
+  width: auto;
+  margin-right: 20px;
+  cursor: pointer;
+}
+#itemGrid img:last-of-type {
+  margin-right: 0;
+}
+#itemGrid img:hover {
+  opacity: 0.6;
+}
+#footer #chatForm {
+  display: block;
+}
+#chatForm input {
+  height: 25px;
+  font-size: 0.7em;
+  margin-top: 0;
+  text-transform: uppercase;
+}
+/* footer corners*/
+#footerLeft {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  height: 20px;
+}
+#footerLeft div {
+  position: relative;
+  display: inline-block;
+  height: 100%;
+  cursor: pointer;
+}
+#footerLeft div:hover, #footerRight div:hover {
+  opacity: 0.6;
+}
+#footerLeft div img {
+  display: block;
+  position: relative;
+  height: 100%;
+  width: auto;
+}
+
+#footerRight {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+}
+#footerRight div {
+  position: relative;
+  display: inline-block;
+  width: 80px;
+  height: 100%;
+  cursor: pointer;
+}
+#footerRight img {
+  display: block;
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: auto;
+}
+#footerRight img:nth-of-type(2){
+  display: none;
+}
+
+/*iframes*/
+#iframesContainer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  -webkit-transform: translate(-50%, -50%);
+}
+#iframesContainer iframe {
+  position: absolute;
+  display: block;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 200px;
+}
+
+/* videos */
+#popupContainer {
+  display: none;
+  position: fixed;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  left: 0;
+  z-index: 999;
+  background: rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+#popupContainer .popup {
+  position: absolute;
+  width: 40%;
+  left: 30%;
+  top: 50%;
+  border-radius: 20px;
+  transform: translateY(-50%) scale(0);
+  -webkit-transform: translateY(-50%) scale(0);
+  transition: transform 0.2s;
+  -webkit-transition: transform 0.2s;
+}
+.popupAnimation {
+  transform: translateY(-50%) scale(1) !important;
+  -webkit-transform: translateY(-50%) scale(1) !important;
+}
+
+/*voice message */
+#voiceMessageContainer {
+  display: none;
+  position: fixed;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  left: 0;
+  z-index: 999;
+  background: rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+#voiceMessageContainer #voiceMessageButton {
+  position: absolute;
+  background: black url('../imgs/ui/mic.png') center no-repeat;
+  background-size: 30%;
+  width: 100px;
+  height: 100px;
+  top: 50%;
+  left: 50%;
+  border-radius: 300px;
+  transform: translateX(-50%) translateY(-50);
+  -webkit-transform: translateX(-50%) translateY(-50%);
+}
+.recording {
+  background: red url('../imgs/ui/mic.png') center no-repeat !important;
+  background-size: 30% !important;
+}
+#voiceMessageButton:hover {
+  opacity: 0.6;
+}
+
+/*centered elements */
+.center {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  -webkit-transform: translate(-50%, -50%);
+  z-index: 999;
+}
+
+/*center text*/
+#centerText {
+  top: 40%;
+  display: block !important;
+}
+#centerText p {
+  font: 10px;
+  text-transform: uppercase;
+  text-align: center;
+  color: white;
+}
+
+/* options */
+#optionsMenu {
+  display: none;
+  position: absolute;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 15px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  -webkit-transform: translate(-50%, -50%);
+  text-align: center;
+}
+#optionsMenu #optionsTitle {
+  color: white;
+  text-transform: uppercase;
+  font-size: 0.8em;
+  padding-bottom: 10px;
+}
+#optionsMenu a {
+  display: none;
+  background: black;
+  width: 100px;
+  cursor: pointer;
+  text-align: center;
+  padding: 10px;
+  margin: 10px auto 0 auto;
+
+  font-size: 0.8em;
+  color: white;
+  text-transform: uppercase;
+  line-height: 30px;
+}
+
+.exitForm:hover {
+  opacity: 0.6;
+}
+
+@media (max-width:732px) {
+  #itemGrid img {
+    height: 25px;
+    margin-right: 10px;
+  }
+  #itemGrid img:last-of-type {
+    margin-right: 0;
+  }
+  #characterSelection {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  #characterSelection #character {
+    position: absolute;
+    left: 50%;
+    bottom: 400px;
+    margin-bottom: 0;
+    width: 150px;
+    transform: translateX(-50%);
+    -webkit-transform: translateX(-50%);
+  }
+  #characterSelection #selectionBox {
+    position: absolute;
+    bottom: 0;
+  }
+}
